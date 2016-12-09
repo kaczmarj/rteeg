@@ -1,0 +1,12 @@
+.DS_Store
+
+# Compiled Python code
+*.pyc
+
+# Jupyter Notebook checkpoints
+*.ipynb_checkpoints
+
+# EEG data
+*.fif
+*.easy
+*.info
