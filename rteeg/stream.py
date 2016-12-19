@@ -10,6 +10,8 @@ TO DO
 -----
 - Implement scaling for EEG. Divide raw data by 1000000. How can we define a
     default scaling factor for each system?
+- Test whether time correction works when markers and EEG are on different
+    computers.
 - Check whether LSL stream broke off.
     If stream breaks off, warning is written in the terminal running Jupyter
     Notebook. Stream reconnects automatically, assuming the same unique ID was
@@ -22,7 +24,6 @@ TO DO
 - Try classifying something easy (hearing a sound versus no sound).
 - Implement verbose support.
 - Change docstring style?
-- Fixed viz_ica("cleaned_data"). Not scaling the plot properly.
 
 
 ISSUES
@@ -136,7 +137,7 @@ def _get_stream_inlet(type_='EEG', lsl_predicate=None):
     else:
         raise ValueError("Multiple streams of type '{}' are available. Script "
                          "requires that there only be one stream of type '{}' "
-                         "with the given predicate".format(type_))
+                         "with the given predicate".format(type_, type_))
 
     return inlet
 
@@ -157,9 +158,13 @@ def _grab_data_indefinitely(lsl_inlet, list_, rlock, kill_signal):
     kill_signal : threading.Event
         If set, while loop will exit.
     """
+    # Get time offset and add it to the timestamps to synchronize multiple
+    # streams.
+    time_correction = lsl_inlet.time_correction()
+
     while not kill_signal.is_set():
         sample, timestamp = lsl_inlet.pull_sample()
-        sample.append(timestamp)
+        sample.append(timestamp + time_correction)
         with rlock:
             list_.append(sample)
 
@@ -292,8 +297,6 @@ class Stream(object):
             'markers': False,
         }
 
-        self.t0 = 0
-
         self._eeg_data = []
         self._marker_data = []
 
@@ -338,14 +341,11 @@ class Stream(object):
 
         Returns
         -------
-        data_time : time based on number of samples and sampling rate.
-        real_time : number of seconds passed since stream was connected.
+        data_time : float(number of samples) * (sampling frequency)
         """
         self._check_if_stream_active('eeg')
-        data_time = len(self._eeg_data) / self.info['sfreq']
-        real_time = time.time() - self.t0
 
-        return data_time, real_time
+        return len(self._eeg_data) / self.info['sfreq']
 
 
     def _connect(self, type_, lsl_predicate, data, lock, kill_signal,
@@ -369,7 +369,6 @@ class Stream(object):
         self._stream_inlet_objects[type_.lower()] = inlet
 
         self.active_streams[type_.lower()] = True
-        self.t0 = time.time()
 
         # Get EEG metadata if connecting to an EEG stream.
         if type_.lower() == 'eeg':
@@ -515,9 +514,11 @@ class Stream(object):
 
 
     def time_correction(self, type_):
-        """Retrieve an estimated time correction offset for the given stream.
+        """Return an estimated time correction offset for the given stream.
 
-        This comes from LabStreamingLayer.
+        This is not the latency of the EEG recording.
+
+        Remove this method.
         """
         if type_.lower() not in ['eeg', 'markers']:
             raise ValueError("`type_` must be 'EEG', 'Markers', or None. "
@@ -526,6 +527,20 @@ class Stream(object):
         self._check_if_stream_active(type_.lower())
 
         return self._stream_inlet_objects[type_.lower()].time_correction()
+
+
+    def eeg_latency(self):
+        """Return the latency of the EEG recording in seconds. This is
+        calculated by taking the difference between this machine's clock and the
+        last EEG timestamp.
+
+        Questions
+        ---------
+        - Is the RLock necessary here?
+        """
+        self._check_if_stream_active('eeg')
+        with self._thread_locks['eeg']:
+            return local_clock() - self._eeg_data[-1][-1]
 
 
     def _get_raw_eeg_data(self, data_duration=None):
@@ -562,7 +577,6 @@ class Stream(object):
         return d
 
 
-
     def make_events(self, data, event_duration=0):
         """Create array of events.
 
@@ -587,7 +601,7 @@ class Stream(object):
             Array of events in the shape (n_events, 3).
         """
         # Raises error if stream has not been started yet.
-        self._check_if_stream_active("Markers")
+        self._check_if_stream_active("markers")
 
         # Get the marker data and convert to ndarray.
         lower_time_limit = data[-1,0]
@@ -600,7 +614,7 @@ class Stream(object):
         # Pre-allocate array for speed.
         events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
         event_index = 0
-        # If there is at least one marker...
+        # If there is at least one marker, get markers.
         if tmp.shape[0] > 0:
             for marker_int, timestamp in tmp:
                 # Get the index where this marker happened in the EEG data.
@@ -608,8 +622,8 @@ class Stream(object):
                 # Add a row to the events array.
                 events[event_index, :] = eeg_index, event_duration, marker_int
                 event_index += 1
+        # If there are no markers, return empty events array.
         else:
-            # Make empty events array.
             events = np.array([[0, 0, 0]])
 
         return events
@@ -647,10 +661,10 @@ class Stream(object):
             raw = io.RawArray(raw_data, info, first_samp=first_samp,
                               verbose=verbose)
             events = self.make_events(raw_data)
+            raw_data[-1,:] = 0  # Replace timestamps with zeros.
             raw.add_events(events)
-            raw.info['events'] = events
         else:
-            raw_data[-1,:] = 0  # Make row of timestamps a row of events 0.
+            raw_data[-1,:] = 0  # Replace timestamps with zeros.
             raw = io.RawArray(raw_data, info, first_samp=first_samp,
                               verbose=verbose)
 
@@ -693,7 +707,6 @@ class Stream(object):
 
         if events is None:
             events = self.make_events(raw_data, event_duration=event_duration)
-            print events
 
         raw_data[-1,:] = 0
         raw = io.RawArray(raw_data, self.info)

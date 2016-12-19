@@ -5,6 +5,12 @@ hardware and Coregui. Is there any way around that? Can we check whether the
 list of markers changed in size? Not only if it changes in size but if the
 timestamp is somewhere inside the EEG data.
 
+Potential ways to account for latency:
+    1. Get latency and sleep for that amount before starting analysis.
+    2. In addition to (1), account for changes in latency by sleeping any added
+        latency right before calling the function.
+    3. Get latency and sleep for that amount right before calling the function.
+
 If we wanted to create a model and apply it within the same experiment, how
 could that be done?
     Have a model training block of trials at the beginning, and once the block
@@ -16,10 +22,6 @@ could that be done?
     the model with all of the data. Save the model as an object in the class,
     and predict each upcoming trial. But before each prediction, must filter,
     apply ICA, and extract features.
-
-
-Instead of starting a regular Python thread, should we start a QThread? That
-might make it easier to update the feedback GUI.
 
 
 Add a function that will display a feedback window so the user can design and
@@ -47,7 +49,7 @@ class LoopAnalysis(object):
     Include use example here.
     """
 
-    def __init__(self, stream, buffer_len, analysis_func, analysis_args=(),
+    def __init__(self, stream, buffer_len, func, args=(),
                  show_window=False, n_iterations=None, n_seconds=None):
         """Call an analysis function once a buffer of some size becomes full.
 
@@ -58,14 +60,14 @@ class LoopAnalysis(object):
         buffer_len : int, float
             The length of the buffer in seconds. This is translated to number
             of samples by multiplying buffer_len by the EEG sampling rate.
-        analysis_func : function
+        func : function
             The function to be called everytime the length of the buffer reaches
             buffer_len.
-        analysis_args : tuple
+        args : tuple
             Arguments to pass to `func`.
         show_window : bool (defaults to False)
             If True, shows a PyQt window with whatever is returned by
-            `analysis_func`.
+            `func`.
         n_iterations : int
             If not None, stop the analysis after `n_iterations` iterations.
         n_seconds : int, float
@@ -80,13 +82,12 @@ class LoopAnalysis(object):
             raise TypeError("buffer_len must be type int or float. {} was "
                             "passed.".format(type(buffer_len)))
 
-        if not callable(analysis_func):
-            raise TypeError("Function must be a function. Something not "
-                            "callable was passed.")
+        if not callable(func):
+            raise TypeError("Function must be a Python callable.")
 
-        if type(analysis_args) is not tuple:
+        if type(args) is not tuple:
             raise TypeError("args must of type `tuple`. {} was passed."
-                            "".format(analysis_args))
+                            "".format(args))
 
         if n_iterations is not None and n_seconds is not None:
             warn("n_iterations and n_seconds were both specified. n_seconds "
@@ -99,8 +100,8 @@ class LoopAnalysis(object):
         # Convert to n_samples from time (seconds)
         self.buffer_len = buffer_len * stream.info['sfreq']
 
-        self.analysis_func = analysis_func
-        self.analysis_args = analysis_args
+        self.func = func
+        self.args = args
         self.show_window = show_window
         self.n_iterations = n_iterations
         self.n_seconds = n_seconds
@@ -131,7 +132,9 @@ class LoopAnalysis(object):
             while not self._kill_signal.is_set():
                 if len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
-                    self.analysis_func(*self.analysis_args)
+                    # Sleep to account for latency.
+                    time.sleep(self.stream.eeg_latency())
+                    self.func(*self.args)
                 time.sleep(sleep_time)
 
         elif self.n_iterations is not None:
@@ -141,7 +144,7 @@ class LoopAnalysis(object):
                     self.stop()
                 elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
-                    self.analysis_func(*self.analysis_args)
+                    self.func(*self.args)
                     i += 1
                 time.sleep(sleep_time)
 
@@ -150,7 +153,7 @@ class LoopAnalysis(object):
             while not self._kill_signal.is_set():
                 if len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
-                    self.analysis_func(*self.analysis_args)
+                    self.func(*self.args)
                 if self.stream.recording_duration() - t0 > self.n_seconds:
                     self.stop()
                 time.sleep(sleep_time)
@@ -163,21 +166,12 @@ class LoopAnalysis(object):
         If this function is called, `func` must return a string to be displayed
         in the feedback window. This string can include HTML and CSS, though not
         all CSS is supported. See PyQt's stylesheet.
-
-        Parameters
-        ----------
-        stream : rteeg.Stream
-            The stream to which you are connected.
-        func : function
-            Function to be run on each chunk of data.
-        analysis_args : tuple
-            Arguments for `func`.
         """
         app = QtGui.QApplication.instance()
         if not app:
             app = QtGui.QApplication(sys.argv)
-        self.window = MainWindow(self.stream, self.analysis_func,
-                                 self.analysis_args, self.buffer_len,
+        self.window = MainWindow(self.stream, self.func,
+                                 self.args, self.buffer_len,
                                  self._kill_signal, self.n_iterations,
                                  self.n_seconds)
         self.window.show()
@@ -235,7 +229,7 @@ class MainWindow(QtGui.QWidget):
                              kill_signal=self.kill_signal,
                              n_iterations=self.n_iterations,
                              n_seconds=self.n_seconds)
-        self.worker.beep.connect(self.update)
+        self.worker.refresh_signal.connect(self.update)
         self.worker.start()
 
 
@@ -246,7 +240,7 @@ class MainWindow(QtGui.QWidget):
 
 class Worker(QtCore.QThread):
     """Updates feedback in separate QThread."""
-    beep = QtCore.pyqtSignal(str)
+    refresh_signal = QtCore.pyqtSignal(str)
 
 
     def __init__(self, stream, func, args, buffer_len, kill_signal,
@@ -276,7 +270,7 @@ class Worker(QtCore.QThread):
                 if len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
                     output = self.func(*self.args)
-                    self.beep.emit(output)
+                    self.refresh_signal.emit(output)
                 time.sleep(sleep_time)
 
             elif self.n_iterations is not None:
@@ -286,7 +280,7 @@ class Worker(QtCore.QThread):
                 elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
                     output = self.func(*self.args)
-                    self.beep.emit(output)
+                    self.refresh_signal.emit(output)
                     i += 1
                 time.sleep(sleep_time)
 
@@ -297,7 +291,7 @@ class Worker(QtCore.QThread):
                 elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
                     output = self.func(*self.args)
-                    self.beep.emit(output)
+                    self.refresh_signal.emit(output)
                 time.sleep(sleep_time)
 
 
