@@ -196,37 +196,6 @@ class LoopAnalysis(object):
                      buffer_len=self.buffer_len, kill_signal=self._kill_signal,
                      show_window=self.show_window)
 
-        # b0 = len(self.stream._eeg_data)
-        #
-        # if self.n_iterations is None and self.n_seconds is None:
-        #     while not self._kill_signal.is_set():
-        #         if len(self.stream._eeg_data) - b0 >= self.buffer_len:
-        #             b0 = len(self.stream._eeg_data)
-        #             # Sleep to account for latency.
-        #             self.func(*self.args)
-        #         time.sleep(sleep_time)
-        #
-        # elif self.n_iterations is not None:
-        #     i = 0
-        #     while not self._kill_signal.is_set():
-        #         if i >= self.n_iterations:
-        #             self.stop()
-        #         elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
-        #             b0 = len(self.stream._eeg_data)
-        #             self.func(*self.args)
-        #             i += 1
-        #         time.sleep(sleep_time)
-        #
-        # elif self.n_seconds is not None:
-        #     t0 = self.stream.recording_duration()
-        #     while not self._kill_signal.is_set():
-        #         if len(self.stream._eeg_data) - b0 >= self.buffer_len:
-        #             b0 = len(self.stream._eeg_data)
-        #             self.func(*self.args)
-        #         if self.stream.recording_duration() - t0 > self.n_seconds:
-        #             self.stop()
-        #         time.sleep(sleep_time)
-
     def _loop_analysis_show_window(self):
         """Show feedback window. This window updates the feedback at an interval
         defined by the user.
@@ -330,36 +299,6 @@ class Worker(QtCore.QThread):
         _loop_worker(stream=self.stream, func=self.func, args=self.args,
                      buffer_len=self.buffer_len, kill_signal=self.stopped,
                      show_window=True, pyqt_signal=self.refresh_signal)
-
-        # while self.stopped:
-        #
-        #     if self.n_iterations is None and self.n_seconds is None:
-        #         if len(self.stream._eeg_data) - b0 >= self.buffer_len:
-        #             b0 = len(self.stream._eeg_data)
-        #             output = self.func(*self.args)
-        #             self.refresh_signal.emit(output)
-        #         time.sleep(sleep_time)
-        #
-        #     elif self.n_iterations is not None:
-        #         i = 0
-        #         if i >= self.n_iterations:
-        #             self.stop()
-        #         elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
-        #             b0 = len(self.stream._eeg_data)
-        #             output = self.func(*self.args)
-        #             self.refresh_signal.emit(output)
-        #             i += 1
-        #         time.sleep(sleep_time)
-        #
-        #     elif self.n_seconds is not None:
-        #         t0 = self.stream.recording_duration()
-        #         if self.stream.recording_duration() - t0 > self.n_seconds:
-        #             self.stop()
-        #         elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
-        #             b0 = len(self.stream._eeg_data)
-        #             output = self.func(*self.args)
-        #             self.refresh_signal.emit(output)
-        #         time.sleep(sleep_time)
 
     def stop(self):
         self.stopped = True
