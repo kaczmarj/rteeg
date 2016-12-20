@@ -10,11 +10,11 @@ info = StreamInfo(name='markers', type='Markers', channel_count=1,
 
 # next make an outlet
 outlet = StreamOutlet(info)
-
+trigger = 0
 print("now sending markers...")
 while True:
     # pick a sample to send an wait for a bit
-    trigger = random.choice([1, 2])
     outlet.push_sample([trigger])
     print(trigger)
-    time.sleep(5.0)
+    trigger += 1
+    time.sleep(2.0)

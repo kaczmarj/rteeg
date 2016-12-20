@@ -4,14 +4,13 @@
 KEEP IN MIND
 ------------
 - ICA before filtering (according to Satra).
-
+- read (http://stackoverflow.com/questions/29402606/
+    possible-to-create-a-synchronized-decorator-thats-aware-of-a-methods-object)
 
 TO DO
 -----
 - Implement scaling for EEG. Divide raw data by 1000000. How can we define a
     default scaling factor for each system?
-- Test whether time correction works when markers and EEG are on different
-    computers.
 - Check whether LSL stream broke off.
     If stream breaks off, warning is written in the terminal running Jupyter
     Notebook. Stream reconnects automatically, assuming the same unique ID was
@@ -24,6 +23,7 @@ TO DO
 - Try classifying something easy (hearing a sound versus no sound).
 - Implement verbose support.
 - Change docstring style?
+- Get rid of disconnect and reconnect methods?
 
 
 ISSUES
@@ -137,7 +137,7 @@ def _get_stream_inlet(type_='EEG', lsl_predicate=None):
     else:
         raise ValueError("Multiple streams of type '{}' are available. Script "
                          "requires that there only be one stream of type '{}' "
-                         "with the given predicate".format(type_, type_))
+                         "with the given predicate".format(type_))
 
     return inlet
 
@@ -158,8 +158,7 @@ def _grab_data_indefinitely(lsl_inlet, list_, rlock, kill_signal):
     kill_signal : threading.Event
         If set, while loop will exit.
     """
-    # Get time offset and add it to the timestamps to synchronize multiple
-    # streams.
+    # Get time offset and add it to the timestamps to synchronize streams.
     time_correction = lsl_inlet.time_correction()
 
     while not kill_signal.is_set():
@@ -182,10 +181,10 @@ def _check_data_index(desired_index, data):
     data : ndarray
         The data the user wants to access.
     """
-    current_index = len(data)
-    if desired_index > current_index:
+    current_max = len(data)
+    if desired_index > current_max:
         warnings.warn("Last {} samples were requested, but only {} are "
-                      "present.".format(desired_index, current_index))
+                      "present.".format(desired_index, current_max))
 
     return True
 
@@ -194,6 +193,35 @@ def _check_data_index(desired_index, data):
 class Stream(object):
     """Class to connect to a LabStreamingLayer stream of EEG and/or Markers
     data and to copy the data for analysis in MNE-Python.
+
+    Attributes
+    ----------
+    active_streams : dict of str: bool
+        Indicates whether EEG and/or Markers stream is active.
+    _stream_inlet_objects : dict
+        Dictionary of stream type and the corresponding pylsl.StreamInlet.
+    _threads : dict
+        Dictionary of stream type and the corresponding threading.Thread.
+    _thread_locks : dict
+        Dictionary of stream type and the corresponding threading.RLock.
+    _kill_signals : dict
+        Dictionary of stream type and the corresponding kill signal
+        (threading.Event).
+    _disconnected_streams : dict
+        Dictionary of stream type and whether that stream was disconnected.
+    _eeg_data : list
+        Growing nested list of EEG data.
+    _marker_data : list
+        Growing nested list of Markers data.
+    info : mne.Info
+        Metadata associated with the EEG data.
+    ica : mne.preprocessing.ICA
+        ICA object used to remove artifacts from the EEG data. Uses
+        'extended-infomax' method by default.
+    raw_for_ica : mne.RawArray
+        The raw data on which the ICA solution is computed.
+
+
 
     Use example:
 
@@ -236,42 +264,10 @@ class Stream(object):
     In [11]: # One can make a function that performs the necessary analyses.
     This function can be called every time a buffer of EEG data reaches a
     user-defined size.
-
     """
 
+
     def __init__(self):
-        """
-        Create new Stream instance.
-
-        Should we connect in __init__? Or provide the connect method?
-
-        Attributes
-        ----------
-        active_streams : dict of str: bool
-            Indicates whether EEG and/or Markers stream is active.
-        _stream_inlet_objects : dict
-            Dictionary of stream type and the corresponding pylsl.StreamInlet.
-        _threads : dict
-            Dictionary of stream type and the corresponding threading.Thread.
-        _thread_locks : dict
-            Dictionary of stream type and the corresponding threading.RLock.
-        _kill_signals : dict
-            Dictionary of stream type and the corresponding kill signal
-            (threading.Event).
-        _disconnected_streams : dict
-            Dictionary of stream type and whether that stream was disconnected.
-        _eeg_data : list
-            Growing nested list of EEG data.
-        _marker_data : list
-            Growing nested list of Markers data.
-        info : mne.Info
-            Metadata associated with the EEG data.
-        ica : mne.preprocessing.ICA
-            ICA object used to remove artifacts from the EEG data. Uses
-            'extended-infomax' method by default.
-        raw_for_ica : mne.RawArray
-            The raw data on which the ICA solution is computed.
-        """
         self.active_streams = {
             'eeg': False,
             'markers': False,
@@ -297,13 +293,14 @@ class Stream(object):
             'markers': False,
         }
 
+        self.t0 = 0
+
         self._eeg_data = []
         self._marker_data = []
 
         self.info = None
         self.ica = ICA(method='extended-infomax')
         self.raw_for_ica = None
-
 
     def _check_if_stream_active(self, type_):
         """Check whether a stream is currently active.
@@ -323,30 +320,25 @@ class Stream(object):
             if not active:
                 raise RuntimeError("Markers stream not yet started or marker "
                                    "data is empty.")
-
         return True
-
 
     def available_streams(self):
         """Return list of all available LabStreamingLayer streams.
 
         Should ContinuousResolver be used here instead?
         """
-
         return resolve_streams()
-
 
     def recording_duration(self):
         """Return duration of recording in seconds.
 
         Returns
         -------
-        data_time : float(number of samples) * (sampling frequency)
+        data_time : float
+            Recording duration, calculated by n_samples / sfreq.
         """
         self._check_if_stream_active('eeg')
-
-        return len(self._eeg_data) / self.info['sfreq']
-
+        return len(self._eeg_data) / float(self.info['sfreq'])
 
     def _connect(self, type_, lsl_predicate, data, lock, kill_signal,
                  eeg_sfreq):
@@ -369,6 +361,7 @@ class Stream(object):
         self._stream_inlet_objects[type_.lower()] = inlet
 
         self.active_streams[type_.lower()] = True
+        self.t0 = time.time()
 
         # Get EEG metadata if connecting to an EEG stream.
         if type_.lower() == 'eeg':
@@ -405,11 +398,8 @@ class Stream(object):
             timestamp = time.mktime(d.timetuple())
             self.info['meas_date'] = [timestamp, 0]
 
-        # This function implements an infinite loop.
         _grab_data_indefinitely(inlet, data, lock, kill_signal)
-
         return None
-
 
     def connect(self, eeg=True, markers=False, eeg_predicate=None,
                 markers_predicate=None, eeg_montage=None, eeg_sfreq=None):
@@ -471,9 +461,7 @@ class Stream(object):
         if not eeg and not markers:
             raise RuntimeError("Not trying to connect to any streams because "
                                "EEG and Markers were both set to False.")
-
         return None
-
 
     def disconnect(self):
         """Closes LSL StreamInlet for EEG and/or Markers data and stops
@@ -492,9 +480,7 @@ class Stream(object):
 
                 # # Exit while-loop of data acquisition.
                 # self._kill_signals[this_type_.lower()].set()
-
         return self.active_streams
-
 
     def reconnect(self):
         """Reconnect to a stream after disconnecting.
@@ -512,22 +498,18 @@ class Stream(object):
 
         return self.active_streams
 
-
-    def time_correction(self, type_):
-        """Return an estimated time correction offset for the given stream.
-
-        This is not the latency of the EEG recording.
-
-        Remove this method.
-        """
-        if type_.lower() not in ['eeg', 'markers']:
-            raise ValueError("`type_` must be 'EEG', 'Markers', or None. "
-                             "'{}' was passed".format(type_))
-
-        self._check_if_stream_active(type_.lower())
-
-        return self._stream_inlet_objects[type_.lower()].time_correction()
-
+    # def time_correction(self, type_):
+    #     """Retrieve an estimated time correction offset for the given stream.
+    #
+    #     This comes from LabStreamingLayer.
+    #     """
+    #     if type_.lower() not in ['eeg', 'markers']:
+    #         raise ValueError("`type_` must be 'EEG', 'Markers', or None. "
+    #                          "'{}' was passed".format(type_))
+    #
+    #     self._check_if_stream_active(type_.lower())
+    #
+    #     return self._stream_inlet_objects[type_.lower()].time_correction()
 
     def eeg_latency(self):
         """Return the latency of the EEG recording in seconds. This is
@@ -541,7 +523,6 @@ class Stream(object):
         self._check_if_stream_active('eeg')
         with self._thread_locks['eeg']:
             return local_clock() - self._eeg_data[-1][-1]
-
 
     def _get_raw_eeg_data(self, data_duration=None):
         """Get data from the EEG data thread. This also returns the timestamps.
@@ -573,9 +554,7 @@ class Stream(object):
 
         # Scale the EEG data (but not timepoints) for Enobio32.
         d[:-1,:] = np.divide(d[:-1,:], 1000000)
-
         return d
-
 
     def make_events(self, data, event_duration=0):
         """Create array of events.
@@ -601,7 +580,7 @@ class Stream(object):
             Array of events in the shape (n_events, 3).
         """
         # Raises error if stream has not been started yet.
-        self._check_if_stream_active("markers")
+        self._check_if_stream_active("Markers")
 
         # Get the marker data and convert to ndarray.
         lower_time_limit = data[-1,0]
@@ -614,7 +593,7 @@ class Stream(object):
         # Pre-allocate array for speed.
         events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
         event_index = 0
-        # If there is at least one marker, get markers.
+        # If there is at least one marker...
         if tmp.shape[0] > 0:
             for marker_int, timestamp in tmp:
                 # Get the index where this marker happened in the EEG data.
@@ -622,8 +601,8 @@ class Stream(object):
                 # Add a row to the events array.
                 events[event_index, :] = eeg_index, event_duration, marker_int
                 event_index += 1
-        # If there are no markers, return empty events array.
         else:
+            # Make empty events array.
             events = np.array([[0, 0, 0]])
 
         return events
@@ -641,7 +620,7 @@ class Stream(object):
         info : mne.Info
             The measurement info. Stored in the attribute info.
         apply_ica : bool (defaults to True)
-            If True and if self.ica has been fitted, will apply the ICA to the
+            If True and self.ica has been fitted, will apply the ICA to the
             requested data. If False, will not fit ICA to the data.
         first_samp : int (defaults to 0)
             Sample offset.
@@ -664,7 +643,7 @@ class Stream(object):
             raw_data[-1,:] = 0  # Replace timestamps with zeros.
             raw.add_events(events)
         else:
-            raw_data[-1,:] = 0  # Replace timestamps with zeros.
+            raw_data[-1,:] = 0  # Make row of timestamps a row of events 0.
             raw = io.RawArray(raw_data, info, first_samp=first_samp,
                               verbose=verbose)
 
@@ -697,7 +676,6 @@ class Stream(object):
         apply_ica : bool (defaults to True)
             If True and if self.ica has been fitted, will apply the ICA to the
             requested data. If False, will not fit ICA to the data.
-
 
         Returns
         -------

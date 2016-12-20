@@ -121,11 +121,9 @@ class LoopAnalysis(object):
 
 
     def _loop_analysis(self):
-        """Call a function every time a buffer reaches a certain length
-        (defined by `self.buffer_len`).
-        """
+        """Call a function every time a buffer reaches `self.buffer_len`."""
         self.analysis_active = True
-        sleep_time = 0.01  # Time to sleep between querying len(list).
+        sleep_time = 0.001  # Time to sleep between querying len(list).
         b0 = len(self.stream._eeg_data)
 
         if self.n_iterations is None and self.n_seconds is None:
@@ -133,7 +131,6 @@ class LoopAnalysis(object):
                 if len(self.stream._eeg_data) - b0 >= self.buffer_len:
                     b0 = len(self.stream._eeg_data)
                     # Sleep to account for latency.
-                    time.sleep(self.stream.eeg_latency())
                     self.func(*self.args)
                 time.sleep(sleep_time)
 
