@@ -78,12 +78,9 @@ from xml.etree import ElementTree as ET
 from mne import concatenate_raws, create_info, Epochs, io, set_log_level
 from mne.preprocessing import ICA
 from mne.utils import ProgressBar
-
 import numpy as np
-
 from pylsl import (StreamInlet, local_clock, resolve_bypred, resolve_byprop,
                    resolve_streams)
-
 
 # Set MNE verbosity.
 # In the future, include this verbosity in a global verbosity setting.
@@ -123,12 +120,10 @@ def _get_stream_inlet(type_='EEG', lsl_predicate=None):
         'markers': "type='Markers' and "
                    "not(starts-with(desc/manufacturer,'NeuroElectrics'))",
     }
-
     if lsl_predicate is None:
         lsl_predicate = default_predicates[type_.lower()]
 
     stream = resolve_bypred(lsl_predicate)
-
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
         print("Connected to {} stream. ".format(type_))
@@ -138,7 +133,6 @@ def _get_stream_inlet(type_='EEG', lsl_predicate=None):
         raise ValueError("Multiple streams of type '{}' are available. Script "
                          "requires that there only be one stream of type '{}' "
                          "with the given predicate".format(type_))
-
     return inlet
 
 
@@ -166,7 +160,6 @@ def _grab_data_indefinitely(lsl_inlet, list_, rlock, kill_signal):
         sample.append(timestamp + time_correction)
         with rlock:
             list_.append(sample)
-
     return None
 
 
@@ -185,7 +178,6 @@ def _check_data_index(desired_index, data):
     if desired_index > current_max:
         warnings.warn("Last {} samples were requested, but only {} are "
                       "present.".format(desired_index, current_max))
-
     return True
 
 
@@ -292,12 +284,8 @@ class Stream(object):
             'eeg': False,
             'markers': False,
         }
-
-        self.t0 = 0
-
         self._eeg_data = []
         self._marker_data = []
-
         self.info = None
         self.ica = ICA(method='extended-infomax')
         self.raw_for_ica = None
@@ -361,7 +349,6 @@ class Stream(object):
         self._stream_inlet_objects[type_.lower()] = inlet
 
         self.active_streams[type_.lower()] = True
-        self.t0 = time.time()
 
         # Get EEG metadata if connecting to an EEG stream.
         if type_.lower() == 'eeg':
@@ -545,13 +532,11 @@ class Stream(object):
             index = int(data_duration * self.info['sfreq'])
             _check_data_index(index, self._eeg_data)
             with self._thread_locks['eeg']:
-                d = [row[:] for row in self._eeg_data[-index:]]
+                d = np.array([row[:] for row in self._eeg_data[-index:]]).T
         else:
             with self._thread_locks['eeg']:
-                d = [row[:] for row in self._eeg_data]
-
-        d = np.array(d, dtype=np.float64).T
-
+                d = np.array([row[:] for row in self._eeg_data]).T
+        # d = np.array(d, dtype=np.float64).T
         # Scale the EEG data (but not timepoints) for Enobio32.
         d[:-1,:] = np.divide(d[:-1,:], 1000000)
         return d
