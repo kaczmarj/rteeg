@@ -11,6 +11,10 @@ Potential ways to account for latency:
         latency right before calling the function.
     3. Get latency and sleep for that amount right before calling the function.
 
+OR we could:
+    1. Inform the user that the Wifi connection must be strong for this module
+        to work with Enobio32.
+
 If we wanted to create a model and apply it within the same experiment, how
 could that be done?
     Have a model training block of trials at the beginning, and once the block
@@ -69,13 +73,17 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
     #     If not None, stop the analysis after `n_seconds` seconds have
     #     passed. Ignore if n_iterations is not None.
     """
-    b0 = len(stream._eeg_data)
+    buffer_time = buffer_len / stream.info['sfreq']
     sleep_time = 0.001  # Time to sleep between buffer_len queries.
-
+    b0 = len(stream._eeg_data)
+    t0 = time.time()
+    latency0 = stream.eeg_latency()
+    time.sleep(latency0)
     if show_window:
         while not kill_signal:
             if len(stream._eeg_data) - b0 >= buffer_len:
                 b0 = len(stream._eeg_data)
+                t0 = time.time()
                 # Refresh PyQt window with whatever `func` returns.
                 pyqt_signal.emit(func(*args))
             time.sleep(sleep_time)
@@ -83,7 +91,10 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
         while not kill_signal.is_set():
             if len(stream._eeg_data) - b0 >= buffer_len:
                 b0 = len(stream._eeg_data)
+                t0 = time.time()
+                # time.sleep(latency0 if latency0 > 0 else 0)  # Account for latency.
                 func(*args)
+            # latency0 = stream.eeg_latency() - latency0
             time.sleep(sleep_time)
 
     # elif n_iterations is not None:
@@ -156,7 +167,7 @@ class LoopAnalysis(object):
 
         if type(args) is not tuple:
             raise TypeError("args must of type `tuple`. {} was passed."
-                            "".format(args))
+                            "".format(type(args)))
 
         if n_iterations is not None and n_seconds is not None:
             warn("n_iterations and n_seconds were both specified. n_seconds "
