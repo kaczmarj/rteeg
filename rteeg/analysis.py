@@ -10,10 +10,13 @@ Potential ways to account for latency:
     2. In addition to (1), account for changes in latency by sleeping any added
         latency right before calling the function.
     3. Get latency and sleep for that amount right before calling the function.
+    4. Use the timestamps. Get current time, and then return function once
+        data has timestamp with current time + buffer_len.
 
 OR we could:
     1. Inform the user that the Wifi connection must be strong for this module
         to work with Enobio32.
+    2. Alert user when latency goes above a threshold.
 
 If we wanted to create a model and apply it within the same experiment, how
 could that be done?
@@ -38,13 +41,19 @@ from threading import Event, Thread
 import time
 from warnings import warn
 
+from pylsl import local_clock
 from PyQt4 import QtGui, QtCore
 
 from .stream import Stream
 
 
+def _get_latest_timestamp(stream):
+    """Get the last recorded timestamp from rteeg.Stream object."""
+    with stream._thread_locks['eeg']:
+        return stream._eeg_data[-1][-1]
+
 def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
-                pyqt_signal=None, n_iterations=None, n_seconds=None):
+                pyqt_signal=None):
     """Call `func(*args)` each time `stream._eeg_data` increases by
     `buffer_len`.
 
@@ -63,60 +72,29 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
         If `show_window` is False, `kill_signal` must be threading.Event. If
         `show_window` is True, `kill_signal` must be QThread method.
     show_window : bool
-        Whether or not PyQt window is shown. If True, will emit `pyqt_signal`.
-        `func`.
+        Whether or not PyQt window is shown. If True, will emit `pyqt_signal`
+        to refresh PyQt window.
     pyqt_signal : pyqt.QtCore.pyqtSignal
         Signal which, when emitted, will change text on the PyQt window.
-    # n_iterations : int
-    #     If not None, stop the analysis after `n_iterations` iterations.
-    # n_seconds : int, float
-    #     If not None, stop the analysis after `n_seconds` seconds have
-    #     passed. Ignore if n_iterations is not None.
     """
-    buffer_time = buffer_len / stream.info['sfreq']
-    sleep_time = 0.001  # Time to sleep between buffer_len queries.
-    b0 = len(stream._eeg_data)
-    t0 = time.time()
-    latency0 = stream.eeg_latency()
-    time.sleep(latency0)
+    SLEEP_TIME = 0.001  # Time to sleep between buffer_len queries.
+    t0 = local_clock()
+
     if show_window:
         while not kill_signal:
-            if len(stream._eeg_data) - b0 >= buffer_len:
-                b0 = len(stream._eeg_data)
-                t0 = time.time()
+            t1 = _get_latest_timestamp(stream)
+            if t1 - t0 >= buffer_len:
+                t0 = t1
                 # Refresh PyQt window with whatever `func` returns.
-                pyqt_signal.emit(func(*args))
-            time.sleep(sleep_time)
+                pyqt_signal.emit(func(*args))  # `func` must return str.
+            time.sleep(SLEEP_TIME)
     else:
         while not kill_signal.is_set():
-            if len(stream._eeg_data) - b0 >= buffer_len:
-                b0 = len(stream._eeg_data)
-                t0 = time.time()
-                # time.sleep(latency0 if latency0 > 0 else 0)  # Account for latency.
+            t1 = _get_latest_timestamp(stream)
+            if t1 - t0 >= buffer_len:
+                t0 = t1
                 func(*args)
-            # latency0 = stream.eeg_latency() - latency0
-            time.sleep(sleep_time)
-
-    # elif n_iterations is not None:
-    #     i = 0
-    #     while not kill_signal:  # change self.stopped to self.stopped
-    #         if i >= self.n_iterations:
-    #             self.stop()
-    #         elif len(self.stream._eeg_data) - b0 >= self.buffer_len:
-    #             b0 = len(self.stream._eeg_data)
-    #             self.func(*self.args)
-    #             i += 1
-    #         time.sleep(sleep_time)
-    #
-    # elif self.n_seconds is not None:
-    #     t0 = self.stream.recording_duration()
-    #     while not kill_signal:
-    #         if len(self.stream._eeg_data) - b0 >= self.buffer_len:
-    #             b0 = len(self.stream._eeg_data)
-    #             self.func(*self.args)
-    #         if self.stream.recording_duration() - t0 > self.n_seconds:
-    #             self.stop()
-    #         time.sleep(sleep_time)
+            time.sleep(SLEEP_TIME)
 
 
 
@@ -177,14 +155,10 @@ class LoopAnalysis(object):
         # Raise error if EEG stream not yet active.
         self.stream._check_if_stream_active('EEG')
 
-        # Convert to n_samples from time (seconds)
-        self.buffer_len = buffer_len * stream.info['sfreq']
-
+        self.buffer_len = buffer_len  # * stream.info['sfreq']
         self.func = func
         self.args = args
         self.show_window = show_window
-        self.n_iterations = n_iterations
-        self.n_seconds = n_seconds
 
         self.analysis_active = False
         self._kill_signal = Event()
@@ -220,8 +194,7 @@ class LoopAnalysis(object):
             app = QtGui.QApplication(sys.argv)
         self.window = MainWindow(self.stream, self.func,
                                  self.args, self.buffer_len,
-                                 self._kill_signal, self.n_iterations,
-                                 self.n_seconds)
+                                 self._kill_signal)
         self.window.show()
         # Stop the AnalysisLoop if MainWindow is closed.
         app.aboutToQuit.connect(self.stop)
@@ -242,7 +215,7 @@ class LoopAnalysis(object):
 class MainWindow(QtGui.QWidget):
     """Window that displays feedback."""
     def __init__(self, stream, func, args, buffer_len, kill_signal,
-                 n_iterations=None, n_seconds=None, parent=None):
+                 parent=None):
         super(MainWindow, self).__init__(parent)
 
         self.stream = stream
@@ -250,9 +223,6 @@ class MainWindow(QtGui.QWidget):
         self.args = args
         self.buffer_len = buffer_len
         self.kill_signal = kill_signal
-        self.n_iterations = n_iterations
-        self.n_seconds = n_seconds
-
 
         self.feedback = QtGui.QLabel()
         self.feedback.setText("Waiting for feedback ...")
@@ -273,9 +243,7 @@ class MainWindow(QtGui.QWidget):
                              func=self.func,
                              args=self.args,
                              buffer_len=self.buffer_len,
-                             kill_signal=self.kill_signal,
-                             n_iterations=self.n_iterations,
-                             n_seconds=self.n_seconds)
+                             kill_signal=self.kill_signal)
         self.worker.refresh_signal.connect(self.update)
         self.worker.start()
 
@@ -289,7 +257,7 @@ class Worker(QtCore.QThread):
     refresh_signal = QtCore.pyqtSignal(str)
 
     def __init__(self, stream, func, args, buffer_len, kill_signal,
-                 n_iterations=None, n_seconds=None, parent=None):
+                 parent=None):
         super(Worker, self).__init__(parent)
 
         self.stream = stream
@@ -297,16 +265,10 @@ class Worker(QtCore.QThread):
         self.args = args
         self.buffer_len = buffer_len
         self._kill_signal = kill_signal
-        # self.n_iterations = n_iterations
-        # self.n_seconds = n_seconds
         self.stopped = True
 
     def run(self):
         self.stopped = False
-
-        sleep_time = 0.001  # Time to sleep between querying len(list).
-        b0 = len(self.stream._eeg_data)
-
         _loop_worker(stream=self.stream, func=self.func, args=self.args,
                      buffer_len=self.buffer_len, kill_signal=self.stopped,
                      show_window=True, pyqt_signal=self.refresh_signal)
