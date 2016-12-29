@@ -6,6 +6,13 @@
 # Jupyter Notebook checkpoints
 *.ipynb_checkpoints
 
+# Testing directories
+*test_notebooks
+*tests
+
+# Old files (delete these files soon)
+*old
+
 # EEG data
 *.fif
 *.easy
