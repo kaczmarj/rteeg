@@ -73,7 +73,7 @@ import numbers
 from threading import Event, RLock, Thread
 import time
 import warnings
-from xml.etree import ElementTree as ET
+# from xml.etree import ElementTree as ET
 
 from mne import concatenate_raws, create_info, Epochs, io, set_log_level
 from mne.preprocessing import ICA
@@ -338,24 +338,30 @@ class Stream(object):
 
         # Get EEG metadata if connecting to an EEG stream.
         if type_.lower() == 'eeg':
-            root = ET.fromstring(inlet.info().as_xml())
-
+            info = inlet.info()
+            # Get sampling frequency.
             if eeg_sfreq is None:
-                try:
-                    sfreq = float(root.find('nominal_srate').text)
-                except AttributeError:
-                    raise ValueError("Could not find sampling frequency. "
-                                     "Please specify sampling frequency in the "
-                                     "parameter eeg_sfreq.")
-            # Add error handling here.
+                sfreq = float(info.nominal_srate())
+                # Add error handling.
 
-            # Get channel names from stream meta-data.
-            # Make this more generic...
-            ch_names = [ch.find('name').text for ch in
-                        root.findall('./desc/channel')]
+            # Get channel names.
+            ch_names = []
+            this_child = info.desc().child('channel')
+            for __ in range(info.channel_count()):
+                ch_names.append(this_child.child_value('name'))
+                this_child = this_child.next_sibling('channel')
 
             if not ch_names:
                 warnings.warn("There are zero channels in the EEG stream.")
+
+            # # Use this in the future for automatic scaling.
+            # units = []
+            # this_child = info.desc().child('channel')
+            # for __ in range(info.channel_count()):
+            #     units.append(this_child.child_value('unit'))
+            #     this_child = this_child.next_sibling('channel')
+            # if all(units):
+            #     eeg_unit = units[0]
 
             # Add stim channel.
             ch_types = ['eeg' for __ in ch_names] + ['stim']
