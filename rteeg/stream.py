@@ -290,6 +290,10 @@ class Stream(object):
         self.ica = ICA(method='extended-infomax')
         self.raw_for_ica = None
 
+    def available_streams(self):
+        """Return list of all available LabStreamingLayer streams."""
+        return resolve_streams()
+
     def _check_if_stream_active(self, type_):
         """Check whether a stream is currently active.
 
@@ -309,24 +313,6 @@ class Stream(object):
                 raise RuntimeError("Markers stream not yet started or marker "
                                    "data is empty.")
         return True
-
-    def available_streams(self):
-        """Return list of all available LabStreamingLayer streams.
-
-        Should ContinuousResolver be used here instead?
-        """
-        return resolve_streams()
-
-    def recording_duration(self):
-        """Return duration of recording in seconds.
-
-        Returns
-        -------
-        data_time : float
-            Recording duration, calculated by n_samples / sfreq.
-        """
-        self._check_if_stream_active('eeg')
-        return len(self._eeg_data) / float(self.info['sfreq'])
 
     def _connect(self, type_, lsl_predicate, data, lock, kill_signal,
                  eeg_sfreq):
@@ -485,18 +471,16 @@ class Stream(object):
 
         return self.active_streams
 
-    # def time_correction(self, type_):
-    #     """Retrieve an estimated time correction offset for the given stream.
-    #
-    #     This comes from LabStreamingLayer.
-    #     """
-    #     if type_.lower() not in ['eeg', 'markers']:
-    #         raise ValueError("`type_` must be 'EEG', 'Markers', or None. "
-    #                          "'{}' was passed".format(type_))
-    #
-    #     self._check_if_stream_active(type_.lower())
-    #
-    #     return self._stream_inlet_objects[type_.lower()].time_correction()
+    def recording_duration(self):
+        """Return duration of recording in seconds.
+
+        Returns
+        -------
+        data_time : float
+            Recording duration, calculated by n_samples / sfreq.
+        """
+        self._check_if_stream_active('eeg')
+        return len(self._eeg_data) / float(self.info['sfreq'])
 
     def eeg_latency(self):
         """Return the latency of the EEG recording in seconds. This is
@@ -525,7 +509,7 @@ class Stream(object):
         data : array
             Array of EEG data with shape (n_channels + timestamp, n_samples)
         """
-        # Raises error if stream has not been started yet.
+        # Raise error if stream has not been started yet.
         self._check_if_stream_active('EEG')
 
         if data_duration is not None:
