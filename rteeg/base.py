@@ -1,7 +1,10 @@
 """Author: Jakub Kaczmarzyk, jakubk@mit.edu"""
 from threading import Event, RLock, Thread
+import warnings
 
 from pylsl import resolve_streams
+
+warnings.filterwarnings(action='always', module='rteeg')
 
 def resolve_streams():
     """Return list of available LabStreamingLayer streams."""
