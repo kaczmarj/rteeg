@@ -19,7 +19,7 @@ How it works
 How to use it
 -------------
 
-To connect to a LabStreamingLayer (LSL) stream of EEG data, create an instance of the class `EEGStream`. The EEG system being used must be specified in the `eeg_system` argument. The program will search for a stream that matches the predicate ``default_predicates.eeg[`eeg_system`]``. Predicates must be written in [XML Path Language](http://en.wikipedia.org/w/index.php?title=XPath_1.0&oldid=474981951) and can be added or removed to suit the user's needs.
+To connect to a LabStreamingLayer (LSL) stream of EEG data, create an instance of the class `EEGStream`. The EEG system being used must be specified in the `eeg_system` argument. The program will search for a stream that matches the predicate [``default_predicates.eeg[`eeg_system`]``](rteeg/default_predicates.py). Predicates must be written in [XML Path Language](http://en.wikipedia.org/w/index.php?title=XPath_1.0&oldid=474981951) and can be added or removed to suit the user's needs.
 
 Once connected to an EEG stream, data can be converted to `mne.Raw` or `mne.Epochs` objects with methods `make_raw()` and `make_epochs()`, respectively. A stream of event markers is required to make an `mne.Epochs` object. Connect to a LSL stream of event markers by creating an instance of the class `MarkerStream`.
 
@@ -46,7 +46,7 @@ To save the data at the end of the recording session, use `make_raw().save(fname
 How to use it if you don't have an EEG cap
 ------------------------------------------
 
-Included in this repo is a script that transmits synthetic EEG data over a LabStreamingLayer stream (`demonstrations/synthesize_data/send_eeg_data.py`). Simply run that file (`python send_eeg_data.py` in a terminal) in order to try `rteeg`. Event markers can be sent by running the file `send_markers.py` in the same directory.
+Included in this repo is a [script that transmits synthetic EEG data](demonstrations/synthesize_data/send_eeg_data.py) over a LabStreamingLayer stream. Simply run that file (`python send_eeg_data.py` in a terminal) in order to try `rteeg`. Event markers can be sent by running the file `send_markers.py` in the same directory.
 
 
 How to save fitted models
