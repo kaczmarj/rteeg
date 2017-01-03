@@ -16,8 +16,9 @@ import numpy as np
 from pylsl import StreamInlet, local_clock, resolve_bypred
 
 from .base import BaseStream
-from .default_predicates import default_predicates
+import default_predicates
 
+# How much MNE talks.
 set_log_level(verbose='error')
 
 # Always print warnings.
@@ -26,16 +27,10 @@ warnings.filterwarnings(action='always', module='rteeg')
 # MNE wants EEG values in volts.
 SCALINGS = {
     'volts': 1.,
-    'millivolts': 1. / 1000,
-    'microvolts': 1. / 1000000,
+    'millivolts': 1. / 1e+3,
+    'microvolts': 1. / 1e+6,
     'nanovolts': 1. / 1e+9,
     'unknown': 1.,
-}
-
-default_predicates = {
-    'eeg': "type='EEG' and starts-with(desc/manufacturer,'NeuroElectrics')",
-    'markers': "type='Markers' and "
-               "not(starts-with(desc/manufacturer,'NeuroElectrics'))",
 }
 
 
@@ -73,24 +68,24 @@ class EEGStream(BaseStream):
     ----------
     eeg_system : {'Enobio32'}
         The EEG system being used. This name indicates which predicate to use
-        in `default_eeg_predicates.py`.
+        in `default_predicates.py`.
+    lsl_predicate : str
     """
-    def __init__(self, eeg_system='Enobio32', lsl_predicate=None):
+    def __init__(self, eeg_system, lsl_predicate=None):
+        super(EEGStream, self).__init__()
         self.eeg_system = eeg_system
         self.lsl_predicate = lsl_predicate
-
         if self.lsl_predicate is None:
             try:
-                lsl_predicate = default_predicates[eeg_system]
+                self.lsl_predicate = default_predicates.eeg[eeg_system]
             except KeyError:
                 raise ValueError("The `eeg_system` {} has no LabStreamingLayer "
                                  "predicate defined in `default_predicates`. "
                                  "Without a valid predicate, streams cannot be "
                                  "found.".format(self.eeg_system))
-
         self.ica = ICA(method='extended-infomax')
         self.raw_for_ica = None
-
+        # Search for and connect to a LabStreamingLayer stream of EEG data.
         self.connect(self._connect, 'EEG-data')
 
     def _connect(self):
@@ -98,7 +93,7 @@ class EEGStream(BaseStream):
         self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
 
         # Extract stream info.
-        info = inlet.info()
+        info = self._stream_inlet.info()
 
         # Get sampling frequency.
         sfreq = float(info.nominal_srate())
@@ -140,14 +135,21 @@ class EEGStream(BaseStream):
         self._record_data_indefinitely(self._stream_inlet)
 
     def get_latency(self):
-        """Return the recording latency (current time minus last timestamp)."""
-        with self._thread_lock:
-            return local_clock() - self.data[-1][-1]
+        """Return the recording latency (current time minus last timestamp).
+
+        There is a weird bug in this method. Last timestamp looks like it does
+        not change. For example, if you call this method, wait 3 seconds, and
+        call it again, it will say the latency is 3 seconds. Is it related to
+        locking? Refreshing something about the last item in `data`? But the
+        lock releases after returning. Not sure how to replicate this bug. Lock
+        is not necessary here.
+        """
+        return local_clock() - self.data[-1][-1]
 
     def get_recording_duration(self):
         """Return duration of recording in seconds (equals n_samples / sfreq).
         """
-        return len(self._eeg_data) / float(self.info['sfreq'])
+        return len(self.data) / float(self.info['sfreq'])
 
     def get_data(self, data_duration=None, scale=None):
         """Return EEG data and timestamps.
@@ -168,10 +170,15 @@ class EEGStream(BaseStream):
         """
         if scale is None:
             scale = SCALINGS[self._eeg_unit]
-        index = data_duration * self.info['sfreq'])
-        data = np.array(self.copy_data(index)).T
-        # Scale the data but not the timestamps.
-        data[:-1,:] = np.multiply(data[:-1,:], scale)
+        if data_duration is None:
+            data = np.array(self.copy_data()).T
+            # Scale the data but not the timestamps.
+            data[:-1,:] = np.multiply(data[:-1,:], scale)
+        else:
+            index = int(data_duration * self.info['sfreq'])
+            data = np.array(self.copy_data(index)).T
+            # Scale the data but not the timestamps.
+            data[:-1,:] = np.multiply(data[:-1,:], scale)
         return data
 
     def make_events(self, data, marker_stream, event_duration=0):
@@ -203,7 +210,7 @@ class EEGStream(BaseStream):
         lower_time_limit = data[-1,0]
         upper_time_limit = data[-1,-1]
         with marker_stream._thread_lock:
-            tmp = np.arrray([row[:] for row in self._marker_data
+            tmp = np.array([row[:] for row in marker_stream.data
                              if upper_time_limit >= row[-1] >= lower_time_limit],
                              dtype=np.int32)
         # Pre-allocate array for speed.
@@ -359,16 +366,16 @@ class EEGStream(BaseStream):
                 # TODO: Check if out of bounds.
 
             elif when == 'next':
-                start_index = len(self._eeg_data)
+                start_index = len(self.data)
                 end_index = start_index + user_index
                 # Wait until the data is available.
                 pbar = ProgressBar(end_index - start_index,
                                    mesg="Collecting data")
-                while len(self._eeg_data) <= end_index:
+                while len(self.data) <= end_index:
                     # Sometimes sys.stdout.flush() raises ValueError. Is it
                     # because the while loop iterates too quickly for I/O?
                     try:
-                        pbar.update(len(self._eeg_data) - start_index)
+                        pbar.update(len(self.data) - start_index)
                     except ValueError:
                         pass
                 print("")
@@ -439,10 +446,11 @@ class EEGStream(BaseStream):
 
 
 class MarkerStream(BaseStream):
-
-    def __init__(self, lsl_predicate):
-        # TODO: add default marker predicate.
-        self.lsl_predicate = lsl_predicate
+    """Docstring here"""
+    def __init__(self, lsl_predicate_key='default'):
+        super(MarkerStream, self).__init__()
+        self.lsl_predicate_key = lsl_predicate_key
+        self.lsl_predicate = default_predicates.markers[self.lsl_predicate_key]
         self.connect(self._connect, 'Marker-data')
 
     def _connect(self):
