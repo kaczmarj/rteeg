@@ -1,22 +1,4 @@
-"""Apply a machine learning model to EEG data.
-
-The analysis messes up if there is a delay in transmission between the EEG
-hardware and Coregui. Is there any way around that? Can we check whether the
-list of markers changed in size? Not only if it changes in size but if the
-timestamp is somewhere inside the EEG data.
-
-Potential ways to account for latency:
-    1. Get latency and sleep for that amount before starting analysis.
-    2. In addition to (1), account for changes in latency by sleeping any added
-        latency right before calling the function.
-    3. Get latency and sleep for that amount right before calling the function.
-    4. Use the timestamps. Get current time, and then return function once
-        data has timestamp with current time + buffer_len.
-
-OR we could:
-    1. Inform the user that the Wifi connection must be strong for this module
-        to work with Enobio32.
-    2. Alert user when latency goes above a threshold.
+"""Class to class a function each time a data buffer becomes full.
 
 If we wanted to create a model and apply it within the same experiment, how
 could that be done?
@@ -34,7 +16,6 @@ TODO
 ----
 1. Add a function that will display a feedback window so the user can design and
     debug their feedback window.
-2. Remove support for n_iterations and n_seconds. It is unnecessary.
 """
 import sys
 from threading import Event, Thread
