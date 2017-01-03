@@ -6,9 +6,6 @@ from pylsl import resolve_streams
 
 warnings.filterwarnings(action='always', module='rteeg')
 
-def resolve_streams():
-    """Return list of available LabStreamingLayer streams."""
-    return resolve_streams()
 
 
 class BaseStream(object):
