@@ -181,6 +181,43 @@ class EEGStream(BaseStream):
             data[:-1,:] = np.multiply(data[:-1,:], scale)
         return data
 
+    def make_raw(self, data_duration=None, apply_ica=True, first_samp=0,
+                 verbose=None, marker_stream=None):
+        """Create instance of mne.io.RawArray.
+
+        Parameters
+        ----------
+        data_duration : int, float
+            Duration of previous data to use. If data=10, returns instance of
+            mne.io.RawArray of the previous 10 seconds of data.
+        apply_ica : bool (defaults to True)
+            If True and self.ica has been fitted, will apply the ICA to the
+            requested data. If False, will not fit ICA to the data.
+        first_samp : int (defaults to 0)
+            Sample offset.
+
+        Returns
+        -------
+        raw : mne.io.RawArray
+            The EEG data.
+        """
+        raw_data = self.get_data(data_duration=data_duration)
+        # Add events if Markers stream was started.
+        if marker_stream is None:
+            raw_data[-1,:] = 0  # Make row of timestamps a row of events 0.
+            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
+                              verbose=verbose)
+        else:
+            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
+                              verbose=verbose)
+            events = self.make_events(raw_data, marker_stream)
+            raw_data[-1,:] = 0  # Replace timestamps with zeros.
+            raw.add_events(events)
+        # If user wants to apply ICA and if ICA has been fitted ...
+        if apply_ica and self.ica.current_fit != 'unfitted':
+            return self.ica.apply(raw)
+        return raw
+
     def make_events(self, data, marker_stream, event_duration=0):
         """Create array of events.
 
@@ -226,44 +263,6 @@ class EEGStream(BaseStream):
             # Make empty events array.
             return np.array([[0, 0, 0]])
         return events
-
-
-    def make_raw(self, data_duration=None, apply_ica=True, first_samp=0,
-                 verbose=None, marker_stream=None):
-        """Create instance of mne.io.RawArray.
-
-        Parameters
-        ----------
-        data_duration : int, float
-            Duration of previous data to use. If data=10, returns instance of
-            mne.io.RawArray of the previous 10 seconds of data.
-        apply_ica : bool (defaults to True)
-            If True and self.ica has been fitted, will apply the ICA to the
-            requested data. If False, will not fit ICA to the data.
-        first_samp : int (defaults to 0)
-            Sample offset.
-
-        Returns
-        -------
-        raw : mne.io.RawArray
-            The EEG data.
-        """
-        raw_data = self.get_data(data_duration=data_duration)
-        # Add events if Markers stream was started.
-        if marker_stream is None:
-            raw_data[-1,:] = 0  # Make row of timestamps a row of events 0.
-            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
-        else:
-            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
-            events = self.make_events(raw_data, marker_stream)
-            raw_data[-1,:] = 0  # Replace timestamps with zeros.
-            raw.add_events(events)
-        # If user wants to apply ICA and if ICA has been fitted ...
-        if apply_ica and self.ica.current_fit != 'unfitted':
-            return self.ica.apply(raw)
-        return raw
 
     def make_epochs(self, marker_stream, data_duration=None, events=None,
                     event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
