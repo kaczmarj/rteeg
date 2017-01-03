@@ -44,11 +44,11 @@ from warnings import warn
 from pylsl import local_clock
 from PyQt4 import QtGui, QtCore
 
-from .stream import Stream
+from .stream import EEGStream
 
 
 def _get_latest_timestamp(stream):
-    """Get the last recorded timestamp from rteeg.Stream object."""
+    """Get the last recorded timestamp from rteeg.EEGStream object."""
     with stream._thread_locks['eeg']:
         return stream._eeg_data[-1][-1]
 
@@ -59,7 +59,7 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
 
     Parameters
     ----------
-    stream : rteeg.Stream
+    stream : rteeg.EEGStream
         Stream of EEG data or event markers.
     func : function
         The function to be called everytime the length of the buffer reaches
@@ -110,7 +110,7 @@ class LoopAnalysis(object):
 
     Parameters
     ----------
-    stream : rteeg.Stream
+    stream : rteeg.EEGStream
         The stream to which you are connected.
     buffer_len : int, float
         The length of the buffer in seconds. This is translated to number
@@ -132,8 +132,8 @@ class LoopAnalysis(object):
 
     def __init__(self, stream, buffer_len, func, args=(),
                  show_window=False, n_iterations=None, n_seconds=None):
-        if type(stream) is not Stream:
-            raise TypeError("Stream must be type `rteeg.stream.Stream`. {} "
+        if type(stream) is not EEGStream:
+            raise TypeError("Stream must be type `rteeg.stream.EEGStream`. {} "
                             "was passed.".format(type(stream)))
 
         if type(buffer_len) is not int and type(buffer_len) is not float:
