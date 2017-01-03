@@ -1,7 +1,4 @@
-"""Classes to stream EEG and marker data.
-
-Author: Jakub Kaczmarzyk, jakubk@mit.edu
-"""
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 from __future__ import division
 
 import datetime
@@ -149,7 +146,7 @@ class EEGStream(BaseStream):
     def get_recording_duration(self):
         """Return duration of recording in seconds (equals n_samples / sfreq).
         """
-        return len(self.data) / float(self.info['sfreq'])
+        return len(self.data) / self.info['sfreq']
 
     def get_data(self, data_duration=None, scale=None):
         """Return EEG data and timestamps.
