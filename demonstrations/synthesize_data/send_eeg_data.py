@@ -26,7 +26,7 @@ info.desc().append_child_value("nominal_srate", "100")
 for c in ch_names:
     info.desc().append_child("channel")\
         .append_child_value("name", c)\
-        .append_child_value("unit", "microvolts")\
+        .append_child_value("unit", "millivolts")\
         .append_child_value("type", "EEG")
 
 outlet = StreamOutlet(info)
