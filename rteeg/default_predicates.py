@@ -14,6 +14,7 @@ eeg = {
 }
 
 markers = {
-    'default': "type='Markers' and "
-               "not(starts-with(desc/manufacturer,'NeuroElectrics'))",
+    'default': "type='Markers'",
+    'no_enobio': "type='Markers' and "
+                 "not(starts-with(desc/manufacturer,'NeuroElectrics'))",
 }
