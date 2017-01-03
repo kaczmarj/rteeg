@@ -1,11 +1,10 @@
-"""Author: Jakub Kaczmarzyk, jakubk@mit.edu"""
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 from threading import Event, RLock, Thread
 import warnings
 
 from pylsl import resolve_streams
 
 warnings.filterwarnings(action='always', module='rteeg')
-
 
 
 class BaseStream(object):
@@ -68,6 +67,5 @@ class BaseStream(object):
             if index > current_max:
                 warnings.warn("Last {} samples were requested, but only {} are "
                               "present.".format(index, current_max))
-
             with self._thread_lock:
                 return [row[:] for row in self.data[-index:]]
