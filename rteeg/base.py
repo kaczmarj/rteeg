@@ -1,21 +1,22 @@
 # Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+"""Base class for recording streams of data."""
 from threading import Event, RLock, Thread
 import warnings
-
-from pylsl import resolve_streams
 
 warnings.filterwarnings(action='always', module='rteeg')
 
 
 class BaseStream(object):
-
+    """Base class for recording streams of data."""
     def __init__(self):
+        self._thread = None
         self._thread_lock = RLock()
         self._kill_signal = Event()
         self.data = []
         self.connected = False
 
     def __del__(self):
+        # Break out of the loop of data collection.
         self._kill_signal.set()
 
     def _record_data_indefinitely(self, inlet):
