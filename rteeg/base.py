@@ -10,7 +10,7 @@ class BaseStream(object):
     """Base class for recording streams of data."""
     def __init__(self):
         self._thread = None
-        self._thread_lock = RLock()
+        self.thread_lock = RLock()
         self._kill_signal = Event()
         self.data = []
         self.connected = False
@@ -32,7 +32,7 @@ class BaseStream(object):
             sample, timestamp = inlet.pull_sample()
             time_correction = inlet.time_correction()
             sample.append(timestamp + time_correction)
-            with self._thread_lock:
+            with self.thread_lock:
                 self.data.append(sample)
 
     def connect(self, target, name):
@@ -61,12 +61,12 @@ class BaseStream(object):
             Get last `index` items. By default, returns all items.
         """
         if index is None:
-            with self._thread_lock:
+            with self.thread_lock:
                 return [row[:] for row in self.data]
         else:
             current_max = len(self.data)
             if index > current_max:
                 warnings.warn("Last {} samples were requested, but only {} are "
                               "present.".format(index, current_max))
-            with self._thread_lock:
+            with self.thread_lock:
                 return [row[:] for row in self.data[-index:]]
