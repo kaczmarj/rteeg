@@ -1,599 +1,243 @@
-"""Stream and analyze EEG data in real-time.
-
-
-KEEP IN MIND
-------------
-- ICA before filtering (according to Satra).
-- read (http://stackoverflow.com/questions/29402606/
-    possible-to-create-a-synchronized-decorator-thats-aware-of-a-methods-object)
-
-TO DO
------
-- Implement scaling for EEG. Divide raw data by 1000000. How can we define a
-    default scaling factor for each system?
-- Check whether LSL stream broke off.
-    If stream breaks off, warning is written in the terminal running Jupyter
-    Notebook. Stream reconnects automatically, assuming the same unique ID was
-    used as when it was started.
-- Offset between last LSL sample and current time?
-- Synchronization of timestamps between streams?
-- Check for existence of EEG and Markers streams.
-- Record with Coregui and with this real-time script. See if identical.
-- Check if this works with BioSemi cap.
-- Try classifying something easy (hearing a sound versus no sound).
-- Implement verbose support.
-- Change docstring style?
-- Get rid of disconnect and reconnect methods?
-
-
-ISSUES
-------
-- Bug in events. For some reason, sometimes the event duration gets the event
-    ID. Why?
-- If recording for a while, there is a pretty large offset between markers in
-    Coregui and markers in this script. Why? Should we get the EEG data by
-    pull_chunk instead of pull_sample? Would that even help?
-    #### It's probably the latency between the EEG hardware and Coregui...
-         There was a delay of 202564 ms... 3 minutes! That is roughly equal to
-         the delay between Coregui and the script.
-- How to run the loop of data processing / classification?
-    - Everytime buffer fills up, trigger. (python `select` module?)
-    - How to query size of buffer? Open up another stream which constantly gets
-    the current buffer size, and trigger something using that.
-    - Or use if-else to trigger only if the buffer is at least some size?
-- How to create classifier during experiment? Update classifier?
-- Known issue with pylsl 1.10.5: On Linux one currently cannot call pylsl
-functions from a thread that is not the main thread. rteeg would not work.
-- How does one build pylsl on a Mac or on Linux?
-
-
-LOOK INTO
----------
-- Poll and trigger
-- ImageNet (and related paper by DiCarlo's group, 2014).
-- Nextflow (data flow)
-- Maybe make different classes to support different EEG devices. Or include the
-default LSL predicates in a dictionary, where each key is an EEG device.
-- What if user wants to input their own mne.Info object??
-
-
-NOTES
------
-- If the EEG or Markers stream was somehow disconnected (e.g., Coregui crashed),
-rteeg will reconnect to the stream once it comes back (as long as it has the
-same unique ID as before it was lost).
-
-
-Author: Jakub Kaczmarzyk, jakubk@mit.edu
-"""
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+"""Classes to stream EEG data and event markers."""
 from __future__ import division
 
 import datetime
 import numbers
-from threading import Event, RLock, Thread
 import time
 import warnings
-# from xml.etree import ElementTree as ET
 
 from mne import concatenate_raws, create_info, Epochs, io, set_log_level
 from mne.preprocessing import ICA
 from mne.utils import ProgressBar
 import numpy as np
-from pylsl import (StreamInlet, local_clock, resolve_bypred, resolve_byprop,
-                   resolve_streams)
+from pylsl import StreamInlet, local_clock, resolve_bypred
 
-# Set MNE verbosity.
-# In the future, include this verbosity in a global verbosity setting.
+from rteeg import default_predicates
+from .base import BaseStream
+
+# How much MNE talks.
 set_log_level(verbose='error')
 
 # Always print warnings.
 warnings.filterwarnings(action='always', module='rteeg')
 
+# MNE wants EEG values in volts.
+SCALINGS = {
+    'volts': 1.,
+    'millivolts': 1. / 1e+3,
+    'microvolts': 1. / 1e+6,
+    'nanovolts': 1. / 1e+9,
+    'unknown': 1.,
+}
 
-def _get_stream_inlet(type_='EEG', lsl_predicate=None):
+
+def _get_stream_inlet(lsl_predicate):
     """Return the stream that fits the given predicate. Raise ValueError if
     multiple streams or zero streams match the predicate.
 
     Parameters
     ----------
-    type : {'EEG', 'Markers'}
-        The type of LSL stream. Defaults to 'EEG' (case-insensitive).
-    lsl_predicate : str (copied from pylsl.resolve_bypred())
-        The predicate string, e.g. "name='BioSemi'" or
-        "type='EEG' and starts-with(name,'BioSemi') and
-        count(description/desc/channels/channel)=32". For more info, refer to:
-        http://en.wikipedia.org/w/index.php?title=XPath_1.0&oldid=474981951.
+    lsl_predicate : str
+        Predicate used to find LabStreamingLayer stream. See
+        `default_eeg_predicates.py` for more info.
 
     Returns
     -------
     inlet : pylsl.StreamInlet
         The LSL stream that matches the given predicate.
     """
-    if type_.lower() not in ['eeg', 'markers']:
-        raise ValueError("`type` must be 'EEG' or 'Markers'. "
-                         "'{}' was passed".format(type_))
-
-    print("Searching for {} stream ... ".format(type_))
-
-    default_predicates = {
-        'eeg': "type='EEG' and starts-with(desc/manufacturer,'NeuroElectrics')",
-        'markers': "type='Markers' and "
-                   "not(starts-with(desc/manufacturer,'NeuroElectrics'))",
-    }
-    if lsl_predicate is None:
-        lsl_predicate = default_predicates[type_.lower()]
-
     stream = resolve_bypred(lsl_predicate)
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
-        print("Connected to {} stream. ".format(type_))
+        print("Connected to stream.")  # TODO: change this to logging.
     elif not stream:
-        raise ValueError("No streams of type '{}' are available.".format(type_))
+        raise ValueError("Zero streams match the given predicate.")
     else:
-        raise ValueError("Multiple streams of type '{}' are available. Script "
-                         "requires that there only be one stream of type '{}' "
-                         "with the given predicate".format(type_))
+        raise ValueError("Multiple streams match the given predicate. Only one "
+                         "stream must match the predicate.")
     return inlet
 
+def make_events(data, marker_stream, event_duration=0):
+    """Create array of events.
 
-def _grab_data_indefinitely(lsl_inlet, list_, rlock, kill_signal):
-    """Append data and timestamp to nested list until a kill signal is received.
-    Modifies list_ in-place. If this function is called within a separate
-    thread, the constantly-growing list_ can be accessed from the main thread.
-
-    Parameters
-    ----------
-    lsl_inlet : pylsl.StreamInlet
-        The StreamInlet of EEG or Markers data.
-    list_ : list
-        The list to which data is appended.
-    rlock : threading.RLock
-        Reentrant lock to make appending and accessing data thread-safe.
-    kill_signal : threading.Event
-        If set, while loop will exit.
-    """
-    # Get time offset and add it to the timestamps to synchronize streams.
-    time_correction = lsl_inlet.time_correction()
-
-    while not kill_signal.is_set():
-        sample, timestamp = lsl_inlet.pull_sample()
-        sample.append(timestamp + time_correction)
-        with rlock:
-            list_.append(sample)
-    return None
-
-
-def _check_data_index(desired_index, data):
-    """Check whether user is requesting more data than exists. Warn if
-    desired_index is out of bounds of data.
+    This function creates an array of events that is compatible with
+    mne.Epochs. If no marker is found, returns ndarray indicating that
+    one event occurred at the same time as the first sample of the EEG data,
+    effectively making an Epochs object out of all of the data (until tmax
+    of mne.Epochs)
 
     Parameters
     ----------
-    desired_index : int
-        The index of the data the user wants to access.
-    data : ndarray
-        The data the user wants to access.
+    data : array
+        EEG data in the shape (n_channels + timestamp, n_samples). Call
+        the method EEGStream._get_raw_eeg_data() to create this array.
+    marker_stream : rteeg.MarkerStream
+        Stream of marker data.
+    event_duration : int (defaults to 0)
+        Duration of each event marker in seconds. This is not epoch
+        duration.
+
+    Returns
+    -------
+    events : ndarray
+        Array of events in the shape (n_events, 3).
     """
-    current_max = len(data)
-    if desired_index > current_max:
-        warnings.warn("Last {} samples were requested, but only {} are "
-                      "present.".format(desired_index, current_max))
-    return True
+    # Get the markers between two times.
+    lower_time_limit = data[-1, 0]
+    upper_time_limit = data[-1, -1]
+    with marker_stream.thread_lock:
+        tmp = np.array([row[:] for row in marker_stream.data
+                        if upper_time_limit >= row[-1] >= lower_time_limit],
+                       dtype=np.int32)
+    # Pre-allocate array for speed.
+    events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
+    # If there is at least one marker ...
+    if tmp.shape[0] > 0:
+        for event_index, (marker_int, timestamp) in enumerate(tmp):
+            # Get the index where this marker happened in the EEG data.
+            eeg_index = (np.abs(data[-1, :] - timestamp)).argmin()
+            # Add a row to the events array.
+            events[event_index, :] = eeg_index, event_duration, marker_int
+    else:
+        # Make empty events array.
+        return np.array([[0, 0, 0]])
+    return events
 
 
-
-class Stream(object):
-    """Class to connect to a LabStreamingLayer stream of EEG and/or Markers
-    data and to copy the data for analysis in MNE-Python.
-
-    Attributes
+class EEGStream(BaseStream):
+    """
+    Parameters
     ----------
-    active_streams : dict of str: bool
-        Indicates whether EEG and/or Markers stream is active.
-    _stream_inlet_objects : dict
-        Dictionary of stream type and the corresponding pylsl.StreamInlet.
-    _threads : dict
-        Dictionary of stream type and the corresponding threading.Thread.
-    _thread_locks : dict
-        Dictionary of stream type and the corresponding threading.RLock.
-    _kill_signals : dict
-        Dictionary of stream type and the corresponding kill signal
-        (threading.Event).
-    _disconnected_streams : dict
-        Dictionary of stream type and whether that stream was disconnected.
-    _eeg_data : list
-        Growing nested list of EEG data.
-    _marker_data : list
-        Growing nested list of Markers data.
-    info : mne.Info
-        Metadata associated with the EEG data.
-    ica : mne.preprocessing.ICA
-        ICA object used to remove artifacts from the EEG data. Uses
-        'extended-infomax' method by default.
-    raw_for_ica : mne.RawArray
-        The raw data on which the ICA solution is computed.
-
-
-
-    Use example:
-
-    In [1]: %matplotlib qt
-
-    In [2]: import rteeg
-
-    In [3]: rt = rteeg.Stream()
-
-    In [4]: rt.connect(eeg=True, markers=True, eeg_montage='Enobio32')
-    Searching for EEG stream ...
-    Searching for Markers stream ...
-
-    In [5]:
-    Connected to Markers stream. Connected to EEG stream.
-
-    In [5]: print rt.recording_duration()
-    80.15
-
-    In [6]: rt.fit_ica(10)  # Fit ICA on next 10 seconds of data.
-    [........................................] 100.00000 | Collecting data
-    Computing ICA solution ...
-    Finished in 0.82 s
-    Out[6]: <ICA  |  raw data decomposition, fit (extended-infomax): 1000
-    samples, 32 components, channels used: "eeg">
-
-    In [7]: rt.ica.plot_sources(rt.raw_for_ica)
-    Out[7]: <matplotlib.figure.Figure at 0x11c1a5150>
-
-    In [8]: print(rt.ica.exclude)  # Components marked for exclusion.
-    [1, 2]
-
-    In [9]: rt.ica.apply(rt.raw_for_ica).plot(scalings='auto')
-    Out[9]: <matplotlib.figure.Figure at 0x103c9fe90>
-
-    In [10]: rt.make_raw(20)  # Applies ICA automatically.
-    Out[10]: <RawArray  |  None, n_channels x n_times : 33 x 2000 (20.0 sec),
-    ~588 kB, data loaded>
-
-    In [11]: # One can make a function that performs the necessary analyses.
-    This function can be called every time a buffer of EEG data reaches a
-    user-defined size.
+    eeg_system : {'Enobio32'}
+        The EEG system being used. This name indicates which predicate to use
+        in `default_predicates.py`.
+    lsl_predicate : str
     """
+    def __init__(self, eeg_system, lsl_predicate=None):
+        super(EEGStream, self).__init__()
+        self.eeg_system = eeg_system
+        self.lsl_predicate = lsl_predicate
+        if self.lsl_predicate is None:
+            try:
+                self.lsl_predicate = default_predicates.eeg[eeg_system]
+            except KeyError:
+                raise ValueError("The `eeg_system` {} has no LabStreamingLayer "
+                                 "predicate defined in `default_predicates`. "
+                                 "Without a valid predicate, streams cannot be "
+                                 "found.".format(self.eeg_system))
 
-
-    def __init__(self):
-        self.active_streams = {
-            'eeg': False,
-            'markers': False,
-        }
-        self._stream_inlet_objects = {
-            'eeg': None,
-            'markers': None,
-        }
-        self._threads = {
-            'eeg': None,
-            'markers': None,
-        }
-        self._thread_locks = {
-            'eeg': RLock(),
-            'markers': RLock(),
-        }
-        self._kill_signals = {
-            'eeg': Event(),
-            'markers': Event(),
-        }
-        self._disconnected_streams = {
-            'eeg': False,
-            'markers': False,
-        }
-        self._eeg_data = []
-        self._marker_data = []
+        self._stream_inlet = None
+        self._eeg_unit = None
         self.info = None
+
         self.ica = ICA(method='extended-infomax')
         self.raw_for_ica = None
+        # Search for and connect to a LabStreamingLayer stream of EEG data.
+        self.connect(self._connect, 'EEG-data')
 
-    def available_streams(self):
-        """Return list of all available LabStreamingLayer streams."""
-        return resolve_streams()
+    def _connect(self):
+        """Connect to stream and record data to list."""
+        self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
 
-    def _check_if_stream_active(self, type_):
-        """Check whether a stream is currently active.
+        # Extract stream info.
+        info = self._stream_inlet.info()
 
-        Parameters
-        ----------
-        type_ : {'EEG', 'Markers'} (case-insensitive)
-            The stream to check.
+        # Get sampling frequency.
+        sfreq = float(info.nominal_srate())
+
+        # Get channel names.
+        ch_names = []
+        this_child = info.desc().child('channel')
+        for _ in range(info.channel_count()):
+            ch_names.append(this_child.child_value('name'))
+            this_child = this_child.next_sibling('channel')
+
+        # Get the EEG measurement unit (e.g., microvolts).
+        units = []
+        this_child = info.desc().child('channel')
+        for _ in range(info.channel_count()):
+            units.append(this_child.child_value('unit'))
+            this_child = this_child.next_sibling('channel')
+        if all(units):
+            self._eeg_unit = units[0]
+        else:
+            warnings.warn("Could not find EEG measurement unit.")
+            self._eeg_unit = 'unknown'
+
+        # Add stimulus channel.
+        ch_types = ['eeg' for __ in ch_names] + ['stim']
+        ch_names.append('STI 014')
+
+        # Create mne.Info object.
+        self.info = create_info(ch_names=ch_names,
+                                sfreq=sfreq, ch_types=ch_types,
+                                montage=self.eeg_system)
+
+        # Add time of recording.
+        dt = datetime.datetime.now()
+        timestamp = time.mktime(dt.timetuple())
+        self.info['meas_date'] = [timestamp, 0]
+
+        # Record data in a while loop.
+        self._record_data_indefinitely(self._stream_inlet)
+
+    def get_latency(self):
+        """Return the recording latency (current time minus last timestamp).
+
+        There is a weird bug in this method. Last timestamp looks like it does
+        not change. For example, if you call this method, wait 3 seconds, and
+        call it again, it will say the latency is 3 seconds. Is it related to
+        locking? Refreshing something about the last item in `data`? But the
+        lock releases after returning. Not sure how to replicate this bug. Lock
+        is not necessary here.
         """
-        if type_.lower() == 'eeg':
-            active = self.active_streams['eeg'] or bool(self._eeg_data)
-            if not active:
-                raise RuntimeError("EEG stream not yet started or EEG data is "
-                                   "empty.")
-        elif type_.lower() == 'markers':
-            active = self.active_streams['markers'] or bool(self._marker_data)
-            if not active:
-                raise RuntimeError("Markers stream not yet started or marker "
-                                   "data is empty.")
-        return True
+        return local_clock() - self.data[-1][-1]
 
-    def _connect(self, type_, lsl_predicate, data, lock, kill_signal,
-                 eeg_sfreq):
-        """Connect to stream and collect data.
-
-        Parameters
-        ----------
-        type_ : {'EEG', 'Markers'} (case-insensitive)
-            The type of stream to connect to. If "EEG" is passed, will also get
-            sampling rate and channel names of the EEG data.
-        lsl_predicate : str
-            # TODO: add information about the predicate.
-        data : list
-            List to which data is appended.
-        lock : threading.RLock
-            Thread lock used by the desired stream.
+    def get_recording_duration(self):
+        """Return duration of recording in seconds (equals n_samples / sfreq).
         """
-        inlet = _get_stream_inlet(type_=type_, lsl_predicate=lsl_predicate)
+        return len(self.data) / self.info['sfreq']
 
-        self._stream_inlet_objects[type_.lower()] = inlet
-
-        self.active_streams[type_.lower()] = True
-
-        # Get EEG metadata if connecting to an EEG stream.
-        if type_.lower() == 'eeg':
-            info = inlet.info()
-            # Get sampling frequency.
-            if eeg_sfreq is None:
-                sfreq = float(info.nominal_srate())
-                # Add error handling.
-
-            # Get channel names.
-            ch_names = []
-            this_child = info.desc().child('channel')
-            for __ in range(info.channel_count()):
-                ch_names.append(this_child.child_value('name'))
-                this_child = this_child.next_sibling('channel')
-
-            if not ch_names:
-                warnings.warn("There are zero channels in the EEG stream.")
-
-            # # Use this in the future for automatic scaling.
-            # units = []
-            # this_child = info.desc().child('channel')
-            # for __ in range(info.channel_count()):
-            #     units.append(this_child.child_value('unit'))
-            #     this_child = this_child.next_sibling('channel')
-            # if all(units):
-            #     eeg_unit = units[0]
-
-            # Add stim channel.
-            ch_types = ['eeg' for __ in ch_names] + ['stim']
-            ch_names.append('STI 014')
-
-            self.info = create_info(ch_names=ch_names,
-                                    sfreq=sfreq, ch_types=ch_types,
-                                    montage=self.eeg_montage)
-
-            # Add time of recording.
-            # List of POSIX timestamp, number of microseconds.
-            d = datetime.datetime.now()
-            timestamp = time.mktime(d.timetuple())
-            self.info['meas_date'] = [timestamp, 0]
-
-        _grab_data_indefinitely(inlet, data, lock, kill_signal)
-        return None
-
-    def connect(self, eeg=True, markers=False, eeg_predicate=None,
-                markers_predicate=None, eeg_montage=None, eeg_sfreq=None):
-        """Start streaming EEG data and/or markers.
-
-        This function starts daemon thread(s) of EEG data and/or marker data.
-        Being daemons, the threads will exit once the main program exits.
-
-        Parameters
-        ----------
-        eeg : bool (defaults to True)
-            If True, attempts to connect to a LSL stream of type 'EEG' and
-            begins to record EEG data to the list self._eeg_data once connected.
-            To access the EEG data, use the class method _get_raw_eeg_data().
-        markers : bool (defaults to False)
-            If True, attempts to connect to a LSL stream of type Markers and
-            beings to record marker data to the list self._marker_data once
-            connected. To load the markers into a script, use the class method
-            make_events().
-        eeg_predicate : str
-            # TODO: Add information about the predicate.
-        markers_predicate : str
-            # TODO: Add information about the predicate.
-        eeg_montage : str
-            The electrode montage to use. See mne.channels.Montage.
-        eeg_sfreq : int, float
-            The EEG sampling frequency. If this value cannot be found in the LSL
-            stream metadata, the sampling frequency can be supplied in this
-            parameter.
-        """
-        if eeg:
-            if not self.active_streams['eeg']:
-                # Add the EEG montage (channel locations).
-                self.eeg_montage = eeg_montage
-                self._threads['eeg'] = Thread(
-                    target=self._connect, args=(
-                        'EEG', eeg_predicate, self._eeg_data,
-                        self._thread_locks['eeg'], self._kill_signals['eeg'],
-                        eeg_sfreq),
-                    name="EEG-data")
-                self._threads['eeg'].daemon = True
-                self._threads['eeg'].start()
-            else:
-                warnings.warn("EEG stream already active.")
-
-        if markers:
-            if not self.active_streams['markers']:
-                self._threads['markers'] = Thread(
-                    target=self._connect, args=(
-                        'Markers', markers_predicate, self._marker_data,
-                        self._thread_locks['markers'],
-                        self._kill_signals['markers'], None),
-                    name="Markers-data")
-                self._threads['markers'].daemon = True
-                self._threads['markers'].start()
-            else:
-                warnings.warn("Markers stream already active.")
-
-        if not eeg and not markers:
-            raise RuntimeError("Not trying to connect to any streams because "
-                               "EEG and Markers were both set to False.")
-        return None
-
-    def disconnect(self):
-        """Closes LSL StreamInlet for EEG and/or Markers data and stops
-        collecting data (but does not delete the data). This does not stop the
-        threads. They will exit once the program exits.
-        """
-        for type_ in ['eeg', 'markers']:
-            # Only disconnect if the stream is active.
-            if self.active_streams[type_]:
-                # Close the StreamInlet.
-                self._stream_inlet_objects[type_].close_stream()
-
-                # Indicate that the stream_type is inactive and disconnected.
-                self.active_streams[type_] = False
-                self._disconnected_streams[type_] = True
-
-                # # Exit while-loop of data acquisition.
-                # self._kill_signals[this_type_.lower()].set()
-        return self.active_streams
-
-    def reconnect(self):
-        """Reconnect to a stream after disconnecting.
-
-        Reconnecting to stream does not seem to work. Why?
-        """
-        for type_ in ['eeg', 'markers']:
-            # Only reconnect if the stream was disconnected.
-            if self._disconnected_streams[type_]:
-                # Reopen the StreamInlet.
-                self._stream_inlet_objects[type_].open_stream()
-                # Indicate that the stream_type is active and reconnected.
-                self.active_streams[type_] = True
-                self._disconnected_streams[type_] = False
-
-        return self.active_streams
-
-    def recording_duration(self):
-        """Return duration of recording in seconds.
-
-        Returns
-        -------
-        data_time : float
-            Recording duration, calculated by n_samples / sfreq.
-        """
-        self._check_if_stream_active('eeg')
-        return len(self._eeg_data) / float(self.info['sfreq'])
-
-    def eeg_latency(self):
-        """Return the latency of the EEG recording in seconds. This is
-        calculated by taking the difference between this machine's clock and the
-        last EEG timestamp.
-
-        Questions
-        ---------
-        - Is the RLock necessary here?
-        """
-        self._check_if_stream_active('eeg')
-        with self._thread_locks['eeg']:
-            return local_clock() - self._eeg_data[-1][-1]
-
-    def _get_raw_eeg_data(self, data_duration=None):
-        """Get data from the EEG data thread. This also returns the timestamps.
+    def get_data(self, data_duration=None, scale=None):
+        """Return EEG data and timestamps.
 
         Parameters
         ----------
         data_duration : int
             Window of data to output in seconds. If None, will return all of
             the EEG data.
+        scale : int, float
+            Value by which to multiply the EEG data. If None, attempts to
+            scale values to volts.
 
         Returns
         -------
-        data : array
-            Array of EEG data with shape (n_channels + timestamp, n_samples)
+        data : ndarray
+            Array of EEG data with shape (n_channels + timestamp, n_samples).
         """
-        # Raise error if stream has not been started yet.
-        self._check_if_stream_active('EEG')
-
-        if data_duration is not None:
+        if scale is None:
+            scale = SCALINGS[self._eeg_unit]
+        if data_duration is None:
+            data = np.array(self.copy_data()).T
+            # Scale the data but not the timestamps.
+            data[:-1, :] = np.multiply(data[:-1, :], scale)
+        else:
             index = int(data_duration * self.info['sfreq'])
-            _check_data_index(index, self._eeg_data)
-            with self._thread_locks['eeg']:
-                d = np.array([row[:] for row in self._eeg_data[-index:]]).T
-        else:
-            with self._thread_locks['eeg']:
-                d = np.array([row[:] for row in self._eeg_data]).T
-        # d = np.array(d, dtype=np.float64).T
-        # Scale the EEG data (but not timepoints) for Enobio32.
-        d[:-1,:] = np.divide(d[:-1,:], 1000000)
-        return d
+            data = np.array(self.copy_data(index)).T
+            # Scale the data but not the timestamps.
+            data[:-1, :] = np.multiply(data[:-1, :], scale)
+        return data
 
-    def make_events(self, data, event_duration=0):
-        """Create array of events.
-
-        This function creates an array of events that is compatible with
-        mne.Epochs. If no marker is found, returns ndarray indicating that
-        one event occurred at the same time as the first sample of the EEG data,
-        effectively making an Epochs object out of all of the data (until tmax
-        of mne.Epochs)
-
-        Parameters
-        ----------
-        data : array
-            EEG data in the shape (n_channels + timestamp, n_samples). Call
-            the method _get_raw_eeg_data() to create this array.
-        event_duration : int (defaults to 0)
-            Duration of each event marker in seconds. This is not epoch
-            duration.
-
-        Returns
-        -------
-        events : ndarray
-            Array of events in the shape (n_events, 3).
-        """
-        # Raises error if stream has not been started yet.
-        self._check_if_stream_active("Markers")
-
-        # Get the marker data and convert to ndarray.
-        lower_time_limit = data[-1,0]
-        upper_time_limit = data[-1,-1]
-        with self._thread_locks['markers']:
-            tmp = [row[:] for row in self._marker_data
-                   if upper_time_limit >= row[-1] >= lower_time_limit]
-        tmp = np.array(tmp, dtype=np.int32)
-
-        # Pre-allocate array for speed.
-        events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
-        event_index = 0
-        # If there is at least one marker...
-        if tmp.shape[0] > 0:
-            for marker_int, timestamp in tmp:
-                # Get the index where this marker happened in the EEG data.
-                eeg_index = (np.abs(data[-1,:] - timestamp)).argmin()
-                # Add a row to the events array.
-                events[event_index, :] = eeg_index, event_duration, marker_int
-                event_index += 1
-        else:
-            # Make empty events array.
-            events = np.array([[0, 0, 0]])
-
-        return events
-
-
-    def make_raw(self, data=None, info=None, apply_ica=True, first_samp=0,
-                 verbose=None):
+    def make_raw(self, data_duration=None, apply_ica=True, first_samp=0,
+                 marker_stream=None, verbose=None):
         """Create instance of mne.io.RawArray.
 
         Parameters
         ----------
-        data : int, float
+        data_duration : int, float
             Duration of previous data to use. If data=10, returns instance of
             mne.io.RawArray of the previous 10 seconds of data.
-        info : mne.Info
-            The measurement info. Stored in the attribute info.
         apply_ica : bool (defaults to True)
             If True and self.ica has been fitted, will apply the ICA to the
             requested data. If False, will not fit ICA to the data.
@@ -605,43 +249,38 @@ class Stream(object):
         raw : mne.io.RawArray
             The EEG data.
         """
-        raw_data = self._get_raw_eeg_data(data)
-
-        if info is None:
-            info = self.info
-
+        raw_data = self.get_data(data_duration=data_duration)
         # Add events if Markers stream was started.
-        if self.active_streams['markers']:
-            raw = io.RawArray(raw_data, info, first_samp=first_samp,
+        if marker_stream is None:
+            raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
+            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
                               verbose=verbose)
-            events = self.make_events(raw_data)
-            raw_data[-1,:] = 0  # Replace timestamps with zeros.
-            raw.add_events(events)
         else:
-            raw_data[-1,:] = 0  # Make row of timestamps a row of events 0.
-            raw = io.RawArray(raw_data, info, first_samp=first_samp,
+            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
                               verbose=verbose)
-
+            events = make_events(raw_data, marker_stream)
+            raw_data[-1, :] = 0  # Replace timestamps with zeros.
+            raw.add_events(events)
         # If user wants to apply ICA and if ICA has been fitted ...
         if apply_ica and self.ica.current_fit != 'unfitted':
             return self.ica.apply(raw)
-
         return raw
 
-
-    def make_epochs(self, data=None, events=None, event_duration=0,
-                    event_id=None, apply_ica=True, tmin=-0.2, tmax=1.0,
-                    baseline=(None, 0), picks=None, name='Unknown',
+    def make_epochs(self, marker_stream, data_duration=None, events=None,
+                    event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
+                    tmax=1.0, baseline=(None, 0), picks=None, name='Unknown',
                     preload=False, reject=None, flat=None, proj=True, decim=1,
                     reject_tmin=None, reject_tmax=None, detrend=None,
-                    add_eeg_ref=None, on_missing='error',
-                    reject_by_annotation=True, verbose=None):
+                    add_eeg_ref=None, on_missing='error', reject_by_annotation=True,
+                    verbose=None):
         """Create instance of mne.Epochs. If events are not supplied, this
         script must be connected to a Markers stream.
 
         Parameters
         ----------
-        data : int
+        marker_stream : rteeg.MarkerStream
+            Stream of marker data.
+        data_duration : int, float
             Duration of previous data to use. If data=10, returns instance of
             mne.Epochs of the previous 10 seconds of data.
         events : ndarray
@@ -656,29 +295,26 @@ class Stream(object):
         -------
         epochs : mne.Epochs
         """
-        raw_data = self._get_raw_eeg_data(data)
+        raw_data = self.get_data(data_duration=data_duration)
 
         if events is None:
-            events = self.make_events(raw_data, event_duration=event_duration)
+            events = make_events(raw_data, marker_stream, event_duration)
 
-        raw_data[-1,:] = 0
+        raw_data[-1, :] = 0
         raw = io.RawArray(raw_data, self.info)
 
         # If user wants to apply ICA and if ICA has been fitted ...
         if apply_ica and self.ica.current_fit != 'unfitted':
             raw = self.ica.apply(raw)
 
-        epochs = Epochs(raw, events, event_id=event_id, tmin=tmin, tmax=tmax,
-                        baseline=baseline, picks=picks,name=name,
-                        preload=preload, reject=reject, flat=flat, proj=proj,
-                        decim=decim, reject_tmin=reject_tmin,
-                        reject_tmax=reject_tmax, detrend=detrend,
-                        add_eeg_ref=add_eeg_ref, on_missing=on_missing,
-                        reject_by_annotation=reject_by_annotation,
-                        verbose=verbose)
-
-        return epochs
-
+        return Epochs(raw, events, event_id=event_id, tmin=tmin, tmax=tmax,
+                      baseline=baseline, picks=picks, name=name,
+                      preload=preload, reject=reject, flat=flat, proj=proj,
+                      decim=decim, reject_tmin=reject_tmin,
+                      reject_tmax=reject_tmax, detrend=detrend,
+                      add_eeg_ref=add_eeg_ref, on_missing=on_missing,
+                      reject_by_annotation=reject_by_annotation,
+                      verbose=verbose)
 
     def fit_ica(self, data, when='next', warm_start=False):
         """Conduct Independent Components Analysis (ICA) on a segment of data.
@@ -713,15 +349,12 @@ class Stream(object):
             If True, will include the EEG data from the previous fit. If False,
             will only use the data specified in the parameter data.
         """
-        # Raises error if stream has not been started yet.
-        self._check_if_stream_active('EEG')
-
         # Re-define ICA variable to start ICA from scratch if the ICA was
         # already fitted and user wants to fit again.
         if self.ica.current_fit != 'unfitted':
             self.ica = ICA(method='extended-infomax')
 
-        if type(data) is io.RawArray:
+        if isinstance(data, io.RawArray):
             self.raw_for_ica = data
 
         elif isinstance(data, numbers.Number):
@@ -729,36 +362,33 @@ class Stream(object):
             if when.lower() not in ['previous', 'next']:
                 raise ValueError("when must be 'previous' or 'next'. {} was "
                                  "passed.".format(when))
-
             elif when == 'previous':
-                end_index = len(self._eeg_data)
+                end_index = len(self.data)
                 start_index = end_index - user_index
-                # Warns if index is out of bounds.
-                _check_data_index(user_index, self._eeg_data)
+                # TODO: Check if out of bounds.
 
             elif when == 'next':
-                start_index = len(self._eeg_data)
+                start_index = len(self.data)
                 end_index = start_index + user_index
-
                 # Wait until the data is available.
                 pbar = ProgressBar(end_index - start_index,
                                    mesg="Collecting data")
-                while len(self._eeg_data) <= end_index:
+                while len(self.data) <= end_index:
                     # Sometimes sys.stdout.flush() raises ValueError. Is it
-                    # because the while-loop iterates too quickly for I/O?
+                    # because the while loop iterates too quickly for I/O?
                     try:
-                        pbar.update(len(self._eeg_data) - start_index)
+                        pbar.update(len(self.data) - start_index)
                     except ValueError:
                         pass
-                print('')
+                print("")
 
-            with self._thread_locks['eeg']:
-                d = [r[:] for r in self._eeg_data[start_index:end_index]]
-            _data = np.array(d).T
+            with self.thread_lock:
+                _data = np.array([r[:] for r in
+                                  self.data[start_index:end_index]]).T
 
             # Now we have the data array in _data. Use it to make instance of
             # mne.RawArray, and then we can compute the ICA on that instance.
-            _data[-1,:] = 0
+            _data[-1, :] = 0
 
             # Use previous data in addition to the specified data when fitting
             # the ICA, if the user requested this.
@@ -769,11 +399,9 @@ class Stream(object):
                 self.raw_for_ica = io.RawArray(_data, self.info)
 
         print("Computing ICA solution ...")
-        t0 = local_clock()
-        self.ica.fit(self.raw_for_ica)
-        print("Finished in {:.2f} s".format(local_clock() - t0))
-
-        return self.ica
+        t_0 = local_clock()
+        self.ica.fit(self.raw_for_ica.copy())  # Fits in-place.
+        print("Finished in {:.2f} s".format(local_clock() - t_0))
 
 
     def viz_ica(self, plot='components'):
@@ -802,19 +430,33 @@ class Stream(object):
         plot to block, but blocking these plots is not supported by all systems.
         """
         if self.ica.current_fit == 'unfitted' or self.raw_for_ica is None:
-            raise RuntimeError("ICA has not yet been fitted or data used to "
-                               "fit ICA no longer exists. Fit ICA before "
+            raise RuntimeError("ICA has not been fit yet or data used to "
+                               "fit ICA does not exist. Fit ICA before "
                                "calling this function again.")
 
         if plot == 'components':
             return self.ica.plot_sources(self.raw_for_ica)
-
         elif plot == 'map_components':
             return self.ica.plot_components()
-
         elif plot == 'cleaned_data':
             if not self.ica.exclude:
                 warnings.warn("No ICA components were marked for removal. EEG "
                               "data has not been changed.")
-            print(self.ica.exclude)
+            print("Components to be removed: {}".format(self.ica.exclude))
             return self.ica.apply(self.raw_for_ica.copy()).plot()
+
+
+
+class MarkerStream(BaseStream):
+    """Docstring here"""
+    def __init__(self, lsl_predicate_key='default'):
+        super(MarkerStream, self).__init__()
+        self.lsl_predicate_key = lsl_predicate_key
+        self.lsl_predicate = default_predicates.markers[self.lsl_predicate_key]
+        self._stream_inlet = None
+        self.connect(self._connect, 'Marker-data')
+
+    def _connect(self):
+        """Connect to stream and record data to list."""
+        self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
+        self._record_data_indefinitely(self._stream_inlet)
