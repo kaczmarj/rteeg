@@ -86,7 +86,7 @@ def make_events(data, marker_stream, event_duration=0):
     # Get the markers between two times.
     lower_time_limit = data[-1, 0]
     upper_time_limit = data[-1, -1]
-    with marker_stream._thread_lock:
+    with marker_stream.thread_lock:
         tmp = np.array([row[:] for row in marker_stream.data
                         if upper_time_limit >= row[-1] >= lower_time_limit],
                        dtype=np.int32)
@@ -382,7 +382,7 @@ class EEGStream(BaseStream):
                         pass
                 print("")
 
-            with self._thread_lock:
+            with self.thread_lock:
                 _data = np.array([r[:] for r in
                                   self.data[start_index:end_index]]).T
 
