@@ -17,10 +17,10 @@ TODO
 1. Add a function that will display a feedback window so the user can design and
     debug their feedback window.
 """
+import numbers
 import sys
 from threading import Event, Thread
 import time
-from warnings import warn
 
 from pylsl import local_clock
 from PyQt4 import QtGui, QtCore
@@ -30,11 +30,11 @@ from .stream import EEGStream
 
 def _get_latest_timestamp(stream):
     """Get the last recorded timestamp from rteeg.EEGStream object."""
-    with stream._thread_locks['eeg']:
-        return stream._eeg_data[-1][-1]
+    with stream.thread_lock:
+        return stream.data[-1][-1]
 
-def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
-                pyqt_signal=None):
+def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
+                 pyqt_signal=None):
     """Call `func(*args)` each time `stream._eeg_data` increases by
     `buffer_len`.
 
@@ -47,8 +47,8 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
         `buffer_len`.
     args : tuple
         Arguments to pass to `func`.
-    buffer_len : int
-        The length of the buffer in number of samples.
+    buffer_len : int, float
+        The duration of the buffer in seconds.
     kill_signal
         If `show_window` is False, `kill_signal` must be threading.Event. If
         `show_window` is True, `kill_signal` must be QThread method.
@@ -58,24 +58,26 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window,
     pyqt_signal : pyqt.QtCore.pyqtSignal
         Signal which, when emitted, will change text on the PyQt window.
     """
-    SLEEP_TIME = 0.001  # Time to sleep between buffer_len queries.
-    t0 = local_clock()
+    sleep_time = 0.001  # Time to sleep between buffer_len queries.
+    t_zero = local_clock()
 
     if show_window:
         while not kill_signal:
-            t1 = _get_latest_timestamp(stream)
-            if t1 - t0 >= buffer_len:
-                t0 = t1
-                # Refresh PyQt window with whatever `func` returns.
-                pyqt_signal.emit(func(*args))  # `func` must return str.
-            time.sleep(SLEEP_TIME)
+            # t_one = _get_latest_timestamp(stream)
+            t_one = stream.data[-1][-1]
+            if t_one - t_zero >= buffer_len:
+                t_zero = t_one
+                # Refresh PyQt window with the str that `func` returns.
+                pyqt_signal.emit(func(*args))
+            time.sleep(sleep_time)
     else:
         while not kill_signal.is_set():
-            t1 = _get_latest_timestamp(stream)
-            if t1 - t0 >= buffer_len:
-                t0 = t1
+            # t_one = _get_latest_timestamp(stream)
+            t_one = stream.data[-1][-1]
+            if t_one - t_zero >= buffer_len:
+                t_zero = t_one
                 func(*args)
-            time.sleep(SLEEP_TIME)
+            time.sleep(sleep_time)
 
 
 
@@ -111,37 +113,26 @@ class LoopAnalysis(object):
         passed. Ignore if n_iterations is not None.
     """
 
-    def __init__(self, stream, buffer_len, func, args=(),
-                 show_window=False, n_iterations=None, n_seconds=None):
-        if type(stream) is not EEGStream:
+    def __init__(self, stream, buffer_len, func, args=(), show_window=False):
+        if not isinstance(stream, EEGStream):
             raise TypeError("Stream must be type `rteeg.stream.EEGStream`. {} "
                             "was passed.".format(type(stream)))
-
-        if type(buffer_len) is not int and type(buffer_len) is not float:
-            raise TypeError("buffer_len must be type int or float. {} was "
-                            "passed.".format(type(buffer_len)))
-
+        if not isinstance(buffer_len, numbers.Number):
+            raise TypeError("buffer_len must be a number. {} was passed."
+                            "".format(type(buffer_len)))
         if not callable(func):
             raise TypeError("Function must be a Python callable.")
-
-        if type(args) is not tuple:
-            raise TypeError("args must of type `tuple`. {} was passed."
+        if not isinstance(args, tuple):
+            raise TypeError("args must be a tuple. {} was passed."
                             "".format(type(args)))
 
-        if n_iterations is not None and n_seconds is not None:
-            warn("n_iterations and n_seconds were both specified. n_seconds "
-                 "will be ignored.")
-
         self.stream = stream
-        # Raise error if EEG stream not yet active.
-        self.stream._check_if_stream_active('EEG')
-
-        self.buffer_len = buffer_len  # * stream.info['sfreq']
+        self.buffer_len = buffer_len
         self.func = func
         self.args = args
         self.show_window = show_window
 
-        self.analysis_active = False
+        self.running = False
         self._kill_signal = Event()
 
         if not self.show_window:
@@ -156,8 +147,7 @@ class LoopAnalysis(object):
 
     def _loop_analysis(self):
         """Call a function every time a buffer reaches `self.buffer_len`."""
-        self.analysis_active = True
-
+        self.running = True
         _loop_worker(stream=self.stream, func=self.func, args=self.args,
                      buffer_len=self.buffer_len, kill_signal=self._kill_signal,
                      show_window=self.show_window)
@@ -184,7 +174,7 @@ class LoopAnalysis(object):
     def stop(self):
         """Stop the analysis loop."""
         self._kill_signal.set()
-        self.analysis_active = False
+        self.running = False
 
         if self.show_window:
             self.window.worker.stop()
@@ -229,6 +219,7 @@ class MainWindow(QtGui.QWidget):
         self.worker.start()
 
     def update(self, text):
+        """Docstring here"""
         self.feedback.setText(text)
 
 
@@ -246,16 +237,20 @@ class Worker(QtCore.QThread):
         self.args = args
         self.buffer_len = buffer_len
         self._kill_signal = kill_signal
+        self.feedback = None
         self.stopped = True
 
     def run(self):
+        """Docstring here"""
         self.stopped = False
         _loop_worker(stream=self.stream, func=self.func, args=self.args,
                      buffer_len=self.buffer_len, kill_signal=self.stopped,
                      show_window=True, pyqt_signal=self.refresh_signal)
 
     def stop(self):
+        """Docstring here"""
         self.stopped = True
 
     def update_value(self, value):
+        """Docstring here"""
         self.feedback = value
