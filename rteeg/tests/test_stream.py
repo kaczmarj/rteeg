@@ -14,3 +14,7 @@ def test_stream():
     # Test stream.make_events().
     test_markers = rteeg.stream.make_events(eeg.get_data(), markers)
     assert np.array_equal(true_markers, test_markers), "Markers not created properly."
+
+
+# Clean up.
+eeg_outlet.stop()
