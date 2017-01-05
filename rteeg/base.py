@@ -13,7 +13,7 @@ class BaseStream(object):
         self.thread_lock = RLock()
         self._kill_signal = Event()
         self.data = []
-        self.connected = False
+        self.active = False
 
     def __del__(self):
         # Break out of the loop of data collection.
@@ -45,12 +45,12 @@ class BaseStream(object):
         name : str
             Name for the thread.
         """
-        if self.connected:
+        if self.active:
             raise RuntimeError("Stream already connected.")
         self._thread = Thread(target=target, name=name)
         self._thread.daemon = True
         self._thread.start()
-        self.connected = True
+        self.active = True
 
     def copy_data(self, index=None):
         """Copy `data` in a thread-safe manner.
