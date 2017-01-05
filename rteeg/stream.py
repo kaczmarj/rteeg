@@ -170,9 +170,16 @@ class EEGStream(BaseStream):
         ch_names.append('STI 014')
 
         # Create mne.Info object.
-        self.info = create_info(ch_names=ch_names,
-                                sfreq=sfreq, ch_types=ch_types,
-                                montage=self.eeg_system)
+        try:
+            self.info = create_info(ch_names=ch_names,
+                                    sfreq=sfreq, ch_types=ch_types,
+                                    montage=self.eeg_system)
+        except ValueError:
+            self.info = create_info(ch_names=ch_names,
+                                    sfreq=sfreq, ch_types=ch_types,
+                                    montage=None)
+            warnings.warn("Could not find montage for {}"
+                          "".format(self.eeg_system))
 
         # Add time of recording.
         dt = datetime.datetime.now()
