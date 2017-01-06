@@ -35,10 +35,11 @@ class SyntheticData(object):
             self.thread.start()
 
     def _send_data(self):
+        sleep_time = 1. / self.sfreq
         sample = [1] * self.n_chs
         while not self.event.is_set():
             self.outlet.push_sample(sample)
-            time.sleep(1 / self.sfreq)
+            time.sleep(sleep_time)
 
     def create_data(self, n_samples):
         data = []
