@@ -69,7 +69,7 @@ def make_events(data, marker_stream, event_duration=0):
 
     Parameters
     ----------
-    data : array
+    data : ndarray
         EEG data in the shape (n_channels + timestamp, n_samples). Call
         the method EEGStream._get_raw_eeg_data() to create this array.
     marker_stream : rteeg.MarkerStream
