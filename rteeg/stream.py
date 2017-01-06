@@ -128,7 +128,7 @@ class EEGStream(BaseStream):
                                  "found.".format(self.eeg_system))
 
         self._stream_inlet = None
-        self._eeg_unit = None
+        self._eeg_unit = 'unknown'
         self.info = None
 
         self.ica = ICA(method='extended-infomax')
@@ -163,7 +163,6 @@ class EEGStream(BaseStream):
             self._eeg_unit = units[0]
         else:
             warnings.warn("Could not find EEG measurement unit.")
-            self._eeg_unit = 'unknown'
 
         # Add stimulus channel.
         ch_types = ['eeg' for __ in ch_names] + ['stim']
