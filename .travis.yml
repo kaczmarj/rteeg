@@ -20,8 +20,8 @@ before_install:
   - tar -xvf PyQt-x11-gpl-4.9.5.tar.gz
   - cd PyQt-x11-gpl-4.9.5
   - python configure.py --confirm-license
-  - make -j 2
-  - travis_wait sudo make install  # travis_wait times out at 20 min by default.
+  - travis_wait make -j 2  # travis_wait times out at 20 min by default.
+  - sudo make install
   - cd ../rteeg
 install:
   # Install dependencies.
