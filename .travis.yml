@@ -5,12 +5,12 @@ python:
   - "3.5"
   - "3.6"
 before_install:
-  - sudo apt-get -qq update  # Update apt-get
+  - sudo apt-get -qq update
   # Install scipy/numpy dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
   - pip install pytest pytest-cov scipy
-  #
-  # apt-get install python-qt4  # A potential way of installing PyQt4
+  # Install PyQt4
+  - sudo apt-get install python-qt4
   #
   # # Download PyQt4 source and build.
   # - cd ..
