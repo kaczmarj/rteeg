@@ -6,7 +6,9 @@ python:
   - "3.6"
 before_install:
   # Is it necessary to install pytest?
-  - pip install pytest pytest-cov scipy
+  - pip install pytest pytest-cov
+  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
+  - pip install scipy
   # # Download PyQt4 source and build.
   # - cd ..
   # - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
