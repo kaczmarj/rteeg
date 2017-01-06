@@ -1,5 +1,3 @@
 mne>=0.11.0
 numpy>=1.9.1
 pylsl>=1.10.5
-pytest>=3.0
-PyQt4>=4.0
