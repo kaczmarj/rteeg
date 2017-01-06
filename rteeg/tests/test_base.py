@@ -3,8 +3,9 @@ import threading
 import time
 
 import numpy as np
-
 from pylsl import resolve_streams, StreamInlet
+import pytest
+
 from rteeg.base import BaseStream
 from rteeg.tests.utils import SyntheticData
 
