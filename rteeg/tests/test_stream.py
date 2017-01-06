@@ -4,7 +4,7 @@ from __future__ import division
 import numpy as np
 import pytest
 
-from rteeg.stream import (_get_stream_inlet, SCALINGS EEGStream, make_events,
+from rteeg.stream import (_get_stream_inlet, SCALINGS, EEGStream, make_events,
                           MarkerStream)
 from rteeg.tests.utils import SyntheticData, true_markers
 
