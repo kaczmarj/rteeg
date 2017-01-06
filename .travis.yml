@@ -5,7 +5,9 @@ python:
   - "3.5"
   - "3.6"
 before_install:
+  # Is it necessary to install pytest?
   - pip install pytest pytest-cov
+  # Download PyQt4 source and build.
   - cd ..
   - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
   - tar -xvf sip-4.14.1.tar.gz
@@ -21,8 +23,8 @@ before_install:
   - make -j 2
   - sudo make install
   - cd ../rteeg
-# command to install dependencies
 install:
+  # Install dependencies.
   - pip install -r requirements.txt
-# command to run tests
+# Command to run tests.
 script: py.test
