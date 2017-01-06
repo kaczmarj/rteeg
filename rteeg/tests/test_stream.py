@@ -1,5 +1,6 @@
 """Tests for rteeg.stream.py"""
 import numpy as np
+
 from rteeg.stream import EEGStream, make_events, MarkerStream, _get_stream_inlet
 from rteeg.tests.utils import SyntheticData, true_markers
 
