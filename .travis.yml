@@ -9,38 +9,25 @@ before_install:
   # Install scipy/numpy dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
   - pip install pytest-cov scipy
-  # Install PyQt4
-  - sudo apt-get install python-qt4 -qq
-  # - cd ..
-  # - wget http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
-  # - tar -xvf sip-4.14.1.tar.gz
-  # - cd sip-4.14.1
-  # - python configure.py
-  # - make
-  # - sudo make install
-  # - cd ..
-  # - python -c 'import sip'
-  # - sudo apt-get install libqt4-dev python-qt4 pyqt4-dev-tools qt4-designer -qq
+  # Download PyQt4 source and build. Is there a faster way?
+  - cd ..
+  - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
+  - tar -xvf sip-4.14.1.tar.gz
+  - cd sip-4.14.1
+  - python configure.py
+  - make -j 2
+  - sudo make install
+  - cd ..
+  - curl -L -O http://sourceforge.net/projects/pyqt/files/PyQt4/PyQt-4.9.5/PyQt-x11-gpl-4.9.5.tar.gz
+  - tar -xvf PyQt-x11-gpl-4.9.5.tar.gz
+  - cd PyQt-x11-gpl-4.9.5
+  - python configure.py --confirm-license
+  - travis_wait make -j 2  # travis_wait times out at 20 min by default.
+  - sudo make install
+  - cd ../rteeg
   - python -c 'import PyQt4'
   - python -c 'import PyQt4.QtCore'
 
-  #
-  # # Download PyQt4 source and build.
-  # - cd ..
-  # - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
-  # - tar -xvf sip-4.14.1.tar.gz
-  # - cd sip-4.14.1
-  # - python configure.py
-  # - make -j 2
-  # - sudo make install
-  # - cd ..
-  # - curl -L -O http://sourceforge.net/projects/pyqt/files/PyQt4/PyQt-4.9.5/PyQt-x11-gpl-4.9.5.tar.gz
-  # - tar -xvf PyQt-x11-gpl-4.9.5.tar.gz
-  # - cd PyQt-x11-gpl-4.9.5
-  # - python configure.py --confirm-license
-  # - travis_wait make -j 2  # travis_wait times out at 20 min by default.
-  # - sudo make install
-  # - cd ../rteeg
 install:
   # Install dependencies.
   - pip install -r requirements.txt
