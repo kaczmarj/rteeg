@@ -10,11 +10,6 @@ from rteeg.base import BaseStream
 from rteeg.tests.utils import SyntheticData
 
 
-def test_BaseStream():
-    test_BaseStream_record_data_indefinitely()
-    test_BaseStream_connect()
-    test_BaseStream_copy_data()
-
 def test_BaseStream_record_data_indefinitely():
     # Start a LabStreamingLayer stream of synthetic data.
     eeg_out = SyntheticData("EEG", 32, 100, send_data=True)
@@ -28,7 +23,7 @@ def test_BaseStream_record_data_indefinitely():
     len_1 = len(base.data)
     assert len_1 > len_0, "Data not being recorded."
     # Clean up.
-    eeg_outlet.stop()
+    eeg_out.stop()
 
 def test_BaseStream_connect():
     def dummy_func():
