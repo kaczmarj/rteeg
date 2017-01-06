@@ -28,5 +28,9 @@ before_install:
 install:
   # Install dependencies.
   - pip install -r requirements.txt
+matrix:
+  allow_failures:
+    - python:
+      - PyQt4
 # Command to run tests.
 script: py.test
