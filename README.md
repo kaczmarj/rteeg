@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/kaczmarj/rteeg.svg?branch=tests)](https://travis-ci.org/kaczmarj/rteeg)
+
 # Real-Time EEG
 
 Python module to stream and analyze EEG data in real-time.
