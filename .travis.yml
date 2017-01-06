@@ -7,22 +7,22 @@ python:
 before_install:
   # Is it necessary to install pytest?
   - pip install pytest pytest-cov
-  # Download PyQt4 source and build.
-  - cd ..
-  - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
-  - tar -xvf sip-4.14.1.tar.gz
-  - cd sip-4.14.1
-  - python configure.py
-  - make -j 2
-  - sudo make install
-  - cd ..
-  - curl -L -O http://sourceforge.net/projects/pyqt/files/PyQt4/PyQt-4.9.5/PyQt-x11-gpl-4.9.5.tar.gz
-  - tar -xvf PyQt-x11-gpl-4.9.5.tar.gz
-  - cd PyQt-x11-gpl-4.9.5
-  - python configure.py --confirm-license
-  - travis_wait make -j 2  # travis_wait times out at 20 min by default.
-  - sudo make install
-  - cd ../rteeg
+  # # Download PyQt4 source and build.
+  # - cd ..
+  # - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
+  # - tar -xvf sip-4.14.1.tar.gz
+  # - cd sip-4.14.1
+  # - python configure.py
+  # - make -j 2
+  # - sudo make install
+  # - cd ..
+  # - curl -L -O http://sourceforge.net/projects/pyqt/files/PyQt4/PyQt-4.9.5/PyQt-x11-gpl-4.9.5.tar.gz
+  # - tar -xvf PyQt-x11-gpl-4.9.5.tar.gz
+  # - cd PyQt-x11-gpl-4.9.5
+  # - python configure.py --confirm-license
+  # - travis_wait make -j 2  # travis_wait times out at 20 min by default.
+  # - sudo make install
+  # - cd ../rteeg
 install:
   # Install dependencies.
   - pip install -r requirements.txt
