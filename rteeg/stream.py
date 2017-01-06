@@ -47,11 +47,11 @@ def _get_stream_inlet(lsl_predicate):
     inlet : pylsl.StreamInlet
         The LSL stream that matches the given predicate.
     """
-    stream = resolve_bypred(lsl_predicate)
+    stream = resolve_bypred(lsl_predicate)  # Should timeout be specified?
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
         print("Connected to stream.")  # TODO: change this to logging.
-    elif not stream:
+    elif not stream:  # This would never happen without a timeout.
         raise ValueError("Zero streams match the given predicate.")
     else:
         raise ValueError("Multiple streams match the given predicate. Only one "
