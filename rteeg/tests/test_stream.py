@@ -2,6 +2,7 @@
 from __future__ import division
 
 import numpy as np
+from pylsl import StreamInlet
 import pytest
 
 from rteeg.stream import (_get_stream_inlet, SCALINGS, EEGStream, make_events,
