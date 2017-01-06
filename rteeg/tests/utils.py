@@ -1,3 +1,4 @@
+from random import randint
 from threading import Thread, Event
 import time
 import numpy as np
@@ -14,7 +15,7 @@ class SyntheticData(object):
         self.sfreq = sfreq
         self.send_data = send_data
 
-        self.stream_name = "test_{}".format(self.type_)
+        self.stream_name = "test_{}_{}".format(self.type_, randint(1,100))
         self.stream_type = 'float32' if self.type_ == "EEG" else 'int32'
 
         info = StreamInfo(self.stream_name, self.type_, self.n_chs, self.sfreq,
