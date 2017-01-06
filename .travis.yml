@@ -1,32 +1,26 @@
 language: python
 python:
   - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.6"
+  # - "3.4"
+  # - "3.5"
+  # - "3.6"
 before_install:
   - sudo apt-get -qq update
   # Install scipy/numpy dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
   - pip install pytest-cov scipy
   # Install PyQt4
-  - cd ..
-  - wget http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
-  - tar -xvf sip-4.14.1.tar.gz
-  - cd sip-4.14.1
-  - python configure.py
-  - make
-  - sudo make install
-  - cd ..
-  - python -c 'import sip'
-  - sudo apt-get install libqt4-dev python-qt4 pyqt4-dev-tools qt4-designer -qq
-  # - wget http://www.riverbankcomputing.com/static/Downloads/PyQt4/PyQt-x11-gpl-4.9.4.tar.gz
-  # - tar zxvf PyQt-x11-gpl-4.9.4.tar.gz
-  # - cd PyQt-x11-gpl-4.9.4/
-  # - echo 'yes' | python configure.py
+  - sudo apt-get install python-qt4 -qq
+  # - cd ..
+  # - wget http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
+  # - tar -xvf sip-4.14.1.tar.gz
+  # - cd sip-4.14.1
+  # - python configure.py
   # - make
   # - sudo make install
   # - cd ..
+  # - python -c 'import sip'
+  # - sudo apt-get install libqt4-dev python-qt4 pyqt4-dev-tools qt4-designer -qq
   - python -c 'import PyQt4'
   - python -c 'import PyQt4.QtCore'
 
