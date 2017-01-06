@@ -5,10 +5,13 @@ python:
   - "3.5"
   - "3.6"
 before_install:
-  # Is it necessary to install pytest?
-  - pip install pytest pytest-cov
+  - sudo apt-get -qq update  # Update apt-get
+  # Install scipy/numpy dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
-  - pip install scipy
+  - pip install pytest pytest-cov scipy
+  #
+  # apt-get install python-qt4  # A potential way of installing PyQt4
+  #
   # # Download PyQt4 source and build.
   # - cd ..
   # - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
@@ -28,9 +31,5 @@ before_install:
 install:
   # Install dependencies.
   - pip install -r requirements.txt
-matrix:
-  allow_failures:
-    - python:
-      - PyQt4
 # Command to run tests.
 script: py.test
