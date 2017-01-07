@@ -236,7 +236,7 @@ class EEGStream(BaseStream):
         return data
 
     def make_raw(self, data_duration=None, apply_ica=True, first_samp=0,
-                 marker_stream=None, verbose=None):
+                 verbose=None):
         """Create instance of mne.io.RawArray.
 
         Parameters
@@ -257,20 +257,13 @@ class EEGStream(BaseStream):
         """
         raw_data = self.get_data(data_duration=data_duration)
         # Add events if Markers stream was started.
-        if marker_stream is None:
-            raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
-            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
-        else:
-            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
-            events = make_events(raw_data, marker_stream)
-            raw_data[-1, :] = 0  # Replace timestamps with zeros.
-            raw.add_events(events)
-        # If user wants to apply ICA and if ICA has been fitted ...
+        raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
+        # If user wants to apply ICA...
         if apply_ica and self.ica.current_fit != 'unfitted':
             return self.ica.apply(raw)
-        return raw
+        else:
+            return io.RawArray(raw_data, self.info, first_samp=first_samp,
+                               verbose=verbose)
 
     def make_epochs(self, marker_stream, data_duration=None, events=None,
                     event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
