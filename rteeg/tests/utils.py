@@ -58,7 +58,8 @@ class SyntheticData(object):
         del self.outlet
 
 
-# This is the array of events that results from merging EEG and Marker data.
+# This is the array of events that results from merging EEG and Marker data,
+# when using marker data from `SyntheticData("Markers", 1, 1).create_data(10)`.
 true_markers = np.array([[  0,   0,   1],
                          [ 79,   0,   1],
                          [179,   0,   1],
