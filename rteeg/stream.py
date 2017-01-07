@@ -295,17 +295,14 @@ class EEGStream(BaseStream):
         epochs : mne.Epochs
         """
         raw_data = self.get_data(data_duration=data_duration)
-
         if events is None:
             events = make_events(raw_data, marker_stream, event_duration)
-
-        raw_data[-1, :] = 0
+        raw_data[-1, :] = 0  # Replace timestamps with zeros.
         raw = io.RawArray(raw_data, self.info)
-
         # If user wants to apply ICA and if ICA has been fitted ...
         if apply_ica and self.ica.current_fit != 'unfitted':
             raw = self.ica.apply(raw)
-
+            # Should this be changed? ICA.apply() works in-place on raw.
         return Epochs(raw, events, event_id=event_id, tmin=tmin, tmax=tmax,
                       baseline=baseline, picks=picks, name=name,
                       preload=preload, reject=reject, flat=flat, proj=proj,
