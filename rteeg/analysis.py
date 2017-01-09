@@ -23,7 +23,10 @@ from threading import Event, Thread
 import time
 
 from pylsl import local_clock
-from PyQt4 import QtGui, QtCore
+try:
+    from PyQt4 import QtGui, QtCore
+except ImportError("Package PyQt4 not found. GUI functionality not available "
+                   "(i.e., LoopAnalysis(..., show_window=True)).")
 
 from .stream import EEGStream
 
