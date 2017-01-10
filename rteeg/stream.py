@@ -1,7 +1,6 @@
 # Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Classes to stream EEG data and event markers."""
-from __future__ import division
-
+from __future__ import division, print_function
 import datetime
 import numbers
 import time
