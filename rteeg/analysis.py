@@ -1,3 +1,4 @@
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Class to class a function each time a data buffer becomes full.
 
 If we wanted to create a model and apply it within the same experiment, how
@@ -17,6 +18,7 @@ TODO
 1. Add a function that will display a feedback window so the user can design and
     debug their feedback window.
 """
+from __future__ import division, print_function
 import numbers
 import sys
 from threading import Event, Thread
@@ -25,8 +27,9 @@ import time
 from pylsl import local_clock
 try:
     from PyQt4 import QtGui, QtCore
-except ImportError("Package PyQt4 not found. GUI functionality not available "
-                   "(i.e., LoopAnalysis(..., show_window=True)).")
+except ImportError:
+    raise ImportError("Package PyQt4 not found. GUI functionality not "
+                      "available (i.e., LoopAnalysis(..., show_window=True)).")
 
 from .stream import EEGStream
 
