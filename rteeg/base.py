@@ -1,5 +1,6 @@
 # Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Base class for recording streams of data."""
+from __future__ import division, print_function
 from threading import Event, RLock, Thread
 import warnings
 
