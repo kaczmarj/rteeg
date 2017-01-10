@@ -1,3 +1,4 @@
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Tests for rteeg.stream.py"""
 from __future__ import division
 
