@@ -10,6 +10,7 @@ before_install:
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
   - pip install pytest-cov scipy
   # Download PyQt4 source and build. Is there a faster way?
+  # At the least, move this to a bash script.
   - cd ..
   - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
   - tar -xvf sip-4.14.1.tar.gz
@@ -32,4 +33,8 @@ install:
   # Install dependencies.
   - pip install -r requirements.txt
 # Command to run tests.
-script: py.test
+script:
+  - py.test
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
