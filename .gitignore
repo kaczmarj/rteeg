@@ -8,7 +8,7 @@
 
 # Testing directories
 *test_notebooks
-*tests
+*eeg_tests
 
 # Old files (delete these files soon)
 *old

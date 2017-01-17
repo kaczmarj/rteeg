@@ -1,5 +1,6 @@
 # Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Base class for recording streams of data."""
+from __future__ import division, print_function
 from threading import Event, RLock, Thread
 import warnings
 
@@ -44,6 +45,10 @@ class BaseStream(object):
             The function to execute in the thread.
         name : str
             Name for the thread.
+
+        Raises
+        ------
+        RuntimeError if attempting to connect more than once.
         """
         if self.active:
             raise RuntimeError("Stream already connected.")

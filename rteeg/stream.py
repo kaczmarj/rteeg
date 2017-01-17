@@ -1,7 +1,6 @@
 # Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Classes to stream EEG data and event markers."""
-from __future__ import division
-
+from __future__ import division, print_function
 import datetime
 import numbers
 import time
@@ -47,11 +46,11 @@ def _get_stream_inlet(lsl_predicate):
     inlet : pylsl.StreamInlet
         The LSL stream that matches the given predicate.
     """
-    stream = resolve_bypred(lsl_predicate)
+    stream = resolve_bypred(lsl_predicate)  # Should timeout be specified?
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
         print("Connected to stream.")  # TODO: change this to logging.
-    elif not stream:
+    elif not stream:  # This would never happen without a timeout.
         raise ValueError("Zero streams match the given predicate.")
     else:
         raise ValueError("Multiple streams match the given predicate. Only one "
@@ -69,7 +68,7 @@ def make_events(data, marker_stream, event_duration=0):
 
     Parameters
     ----------
-    data : array
+    data : ndarray
         EEG data in the shape (n_channels + timestamp, n_samples). Call
         the method EEGStream._get_raw_eeg_data() to create this array.
     marker_stream : rteeg.MarkerStream
@@ -128,7 +127,7 @@ class EEGStream(BaseStream):
                                  "found.".format(self.eeg_system))
 
         self._stream_inlet = None
-        self._eeg_unit = None
+        self._eeg_unit = 'unknown'
         self.info = None
 
         self.ica = ICA(method='extended-infomax')
@@ -163,7 +162,6 @@ class EEGStream(BaseStream):
             self._eeg_unit = units[0]
         else:
             warnings.warn("Could not find EEG measurement unit.")
-            self._eeg_unit = 'unknown'
 
         # Add stimulus channel.
         ch_types = ['eeg' for __ in ch_names] + ['stim']
@@ -237,7 +235,7 @@ class EEGStream(BaseStream):
         return data
 
     def make_raw(self, data_duration=None, apply_ica=True, first_samp=0,
-                 marker_stream=None, verbose=None):
+                 verbose=None):
         """Create instance of mne.io.RawArray.
 
         Parameters
@@ -258,20 +256,13 @@ class EEGStream(BaseStream):
         """
         raw_data = self.get_data(data_duration=data_duration)
         # Add events if Markers stream was started.
-        if marker_stream is None:
-            raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
-            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
-        else:
-            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
-            events = make_events(raw_data, marker_stream)
-            raw_data[-1, :] = 0  # Replace timestamps with zeros.
-            raw.add_events(events)
-        # If user wants to apply ICA and if ICA has been fitted ...
+        raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
+        # If user wants to apply ICA...
         if apply_ica and self.ica.current_fit != 'unfitted':
             return self.ica.apply(raw)
-        return raw
+        else:
+            return io.RawArray(raw_data, self.info, first_samp=first_samp,
+                               verbose=verbose)
 
     def make_epochs(self, marker_stream, data_duration=None, events=None,
                     event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
@@ -303,17 +294,14 @@ class EEGStream(BaseStream):
         epochs : mne.Epochs
         """
         raw_data = self.get_data(data_duration=data_duration)
-
         if events is None:
             events = make_events(raw_data, marker_stream, event_duration)
-
-        raw_data[-1, :] = 0
+        raw_data[-1, :] = 0  # Replace timestamps with zeros.
         raw = io.RawArray(raw_data, self.info)
-
         # If user wants to apply ICA and if ICA has been fitted ...
         if apply_ica and self.ica.current_fit != 'unfitted':
             raw = self.ica.apply(raw)
-
+            # Should this be changed? ICA.apply() works in-place on raw.
         return Epochs(raw, events, event_id=event_id, tmin=tmin, tmax=tmax,
                       baseline=baseline, picks=picks, name=name,
                       preload=preload, reject=reject, flat=flat, proj=proj,
