@@ -114,6 +114,7 @@ def test_EEGStream():
     assert raw.info['sfreq'] == sfreq, "Incorrect sampling frequency."
 
     # TODO: test whether ICA works.
+    # TODO: test that data is being added.
 
 
     # Check EEGStream.make_epochs()
@@ -143,6 +144,8 @@ def test_MarkerStream():
 
     # Check that thread was started.
     assert n_threads_2 - n_threads_1 == 1, "Thread not started."
+
+    # TODO: test that data is being added.
 
     # Clean up.
     marker_out.stop()
