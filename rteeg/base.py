@@ -5,8 +5,6 @@ import collections
 import threading
 import warnings
 
-from wrapt import synchronized
-
 warnings.filterwarnings(action='always', module='rteeg')
 
 
@@ -85,9 +83,6 @@ class ThreadSafeList(collections.MutableSequence):
     __getitem__ methods are thread-safe, which allows for thread-safe appending
     and copying of data.
 
-    The decorator ``synchronized`` from the package ``wrapt`` is used here
-    because it greatly speeds up copying of data.
-
     FYI:
     >>> dir(MutableSequence)
     ['__abstractmethods__', '__class__', '__contains__', '__delattr__',
@@ -108,7 +103,7 @@ class ThreadSafeList(collections.MutableSequence):
             self._list = list()
         else:
             self._list = list(iterable)
-        # self.rlock = threading.RLock()
+        self.rlock = threading.RLock()
 
     def __len__(self): return len(self._list)
 
@@ -118,22 +113,22 @@ class ThreadSafeList(collections.MutableSequence):
         return "{self.__class__.__name__}({self._list})".format(self=self)
 
     def __getitem__(self, i):
-        with synchronized(self):
+        with self.rlock:
             return self._list[i]
 
     def __setitem__(self, index, value):
-        with synchronized(self):
+        with self.rlock:
             self._list[index] = value
 
     def __delitem__(self, i):
-        with synchronized(self):
+        with self.rlock:
             del self._list[i]
 
     def __iter__(self):
-        with synchronized(self):
+        with self.rlock:
             for elem in self._list:
                 yield elem
 
     def insert(self, index, value):
-        with synchronized(self):
+        with self.rlock:
             self._list.insert(index, value)
