@@ -258,11 +258,13 @@ class EEGStream(BaseStream):
         # Add events if Markers stream was started.
         raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
         # If user wants to apply ICA...
-        if apply_ica and self.ica.current_fit != 'unfitted':
-            return self.ica.apply(raw)
-        else:
+        if not apply_ica:
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
                                verbose=verbose)
+        elif apply_ica and self.ica.current_fit != 'unfitted':
+            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
+                              verbose=verbose)
+            return self.ica.apply(raw)
 
     def make_epochs(self, marker_stream, data_duration=None, events=None,
                     event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
