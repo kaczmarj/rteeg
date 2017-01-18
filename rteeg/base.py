@@ -77,7 +77,11 @@ class BaseStream(object):
 class ThreadSafeList(collections.MutableSequence):
     """Thread-safe list class.
 
-    Go back to this to check whether more methods have to be locked.
+    This class is not completely thread-safe. Only the methods that incorporate
+    a thread lock will be thread-safe, and only the methods that are relevant
+    to this package were made thread-safe. For example, the __iter__ and
+    __getitem__ methods are thread-safe, which allows for thread-safe appending
+    and copying of data.
 
     FYI:
     >>> dir(MutableSequence)
@@ -103,9 +107,10 @@ class ThreadSafeList(collections.MutableSequence):
 
     def __len__(self): return len(self._list)
 
-    def __str__(self): return self.__repr__()
+    def __str__(self): return str(self._list)
 
-    def __repr__(self): return str(self._list)
+    def __repr__(self):
+        return "{self.__class__.__name__}({self._list})".format(self=self)
 
     def __getitem__(self, i):
         with self.rlock:
