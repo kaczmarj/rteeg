@@ -77,11 +77,11 @@ class BaseStream(object):
 class ThreadSafeList(collections.MutableSequence):
     """Thread-safe list class.
 
-    This class is not completely thread-safe. Only the methods that incorporate
-    a thread lock will be thread-safe, and only the methods that are relevant
-    to this package were made thread-safe. For example, the __iter__ and
-    __getitem__ methods are thread-safe, which allows for thread-safe appending
-    and copying of data.
+    This class subclasses collections.MutableSequence and is not completely
+    thread-safe. Only the methods that incorporate a thread lock will be
+    thread-safe, and only the methods that are relevant to this package
+    incorporate thread locks. For example, the __iter__ and __getitem__ methods
+    are thread-safe, which allows for thread-safe appending and copying of data.
 
     FYI:
     >>> dir(MutableSequence)
