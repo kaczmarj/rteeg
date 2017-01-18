@@ -1,8 +1,16 @@
+from __future__ import division, print_function
+
 from random import randint
 from threading import Thread, Event
 import time
 import numpy as np
 from pylsl import local_clock, StreamInfo, StreamOutlet
+
+
+def check_equal(list_):
+    """Return True if all values in an iterator are equal."""
+    return list_[1:] == list_[:-1]
+
 
 class SyntheticData(object):
     """Synthesize data for testing purposes."""
