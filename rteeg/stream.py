@@ -85,10 +85,10 @@ def make_events(data, marker_stream, event_duration=0):
     # Get the markers between two times.
     lower_time_limit = data[-1, 0]
     upper_time_limit = data[-1, -1]
-    with marker_stream.thread_lock:
-        tmp = np.array([row[:] for row in marker_stream.data
-                        if upper_time_limit >= row[-1] >= lower_time_limit],
-                       dtype=np.int32)
+    # Copy markers into a Numpy ndarray.
+    tmp = np.array([row[:] for row in marker_stream.data
+                    if upper_time_limit >= row[-1] >= lower_time_limit],
+                   dtype=np.int32)
     # Pre-allocate array for speed.
     events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
     # If there is at least one marker ...
@@ -377,9 +377,8 @@ class EEGStream(BaseStream):
                         pass
                 print("")
 
-            with self.thread_lock:
-                _data = np.array([r[:] for r in
-                                  self.data[start_index:end_index]]).T
+            _data = np.array([r[:] for r in
+                              self.data[start_index:end_index]]).T
 
             # Now we have the data array in _data. Use it to make instance of
             # mne.RawArray, and then we can compute the ICA on that instance.
