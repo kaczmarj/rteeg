@@ -99,7 +99,7 @@ class ThreadSafeList(collections.MutableSequence):
             self._list = list()
         else:
             self._list = list(iterable)
-        self.rlock = RLock()
+        self.rlock = threading.RLock()
 
     def __len__(self): return len(self._list)
 
