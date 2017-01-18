@@ -75,3 +75,7 @@ class BaseStream(object):
                               "present.".format(index, current_max))
             with self.thread_lock:
                 return [row[:] for row in self.data[-index:]]
+
+class ThreadSafeList(list):
+    """A thread-safe list class."""
+    pass
