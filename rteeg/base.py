@@ -79,6 +79,17 @@ class ThreadSafeList(collections.MutableSequence):
 
     Go back to this to check whether more methods have to be locked.
 
+    FYI:
+    >>> dir(MutableSequence)
+    ['__abstractmethods__', '__class__', '__contains__', '__delattr__',
+    '__delitem__', '__dict__', '__doc__', '__format__', '__getattribute__',
+    '__getitem__', '__hash__', '__iadd__', '__init__', '__iter__', '__len__',
+    '__metaclass__', '__module__', '__new__', '__reduce__', '__reduce_ex__',
+    '__repr__', '__reversed__', '__setattr__', '__setitem__', '__sizeof__',
+    '__str__', '__subclasshook__', '__weakref__', '_abc_cache',
+    '_abc_negative_cache', '_abc_negative_cache_version', '_abc_registry',
+    'append', 'count', 'extend', 'index', 'insert', 'pop', 'remove', 'reverse']
+
     Made with help from:
         <http://stackoverflow.com/a/3488283/5666087>
         <http://stackoverflow.com/a/23617436/5666087>
@@ -96,7 +107,9 @@ class ThreadSafeList(collections.MutableSequence):
 
     def __repr__(self): return str(self._list)
 
-    def __getitem__(self, i): return self._list[i]
+    def __getitem__(self, i):
+        with self.rlock:
+            return self._list[i]
 
     def __setitem__(self, index, value):
         with self.rlock:
