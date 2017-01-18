@@ -261,6 +261,9 @@ class EEGStream(BaseStream):
         if not apply_ica:
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
                                verbose=verbose)
+        elif apply_ica and self.ica.current_fit == 'unfitted':
+            return io.RawArray(raw_data, self.info, first_samp=first_samp,
+                              verbose=verbose)
         elif apply_ica and self.ica.current_fit != 'unfitted':
             raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
                               verbose=verbose)
