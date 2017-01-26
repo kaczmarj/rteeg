@@ -269,8 +269,8 @@ class EEGStream(BaseStream):
                     tmax=1.0, baseline=(None, 0), picks=None, name='Unknown',
                     preload=False, reject=None, flat=None, proj=True, decim=1,
                     reject_tmin=None, reject_tmax=None, detrend=None,
-                    add_eeg_ref=None, on_missing='error', reject_by_annotation=True,
-                    verbose=None):
+                    add_eeg_ref=None, on_missing='error',
+                    reject_by_annotation=True, verbose=None):
         """Create instance of mne.Epochs. If events are not supplied, this
         script must be connected to a Markers stream.
 
@@ -398,7 +398,6 @@ class EEGStream(BaseStream):
         self.ica.fit(self.raw_for_ica.copy())  # Fits in-place.
         print("Finished in {:.2f} s".format(local_clock() - t_0))
 
-
     def viz_ica(self, plot='components'):
         """Visualize data with components removed.
 
@@ -439,7 +438,6 @@ class EEGStream(BaseStream):
                               "data has not been changed.")
             print("Components to be removed: {}".format(self.ica.exclude))
             return self.ica.apply(self.raw_for_ica.copy()).plot()
-
 
 
 class MarkerStream(BaseStream):
