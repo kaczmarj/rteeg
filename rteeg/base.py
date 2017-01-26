@@ -81,7 +81,7 @@ class ThreadSafeList(collections.MutableSequence):
     thread-safe. Only the methods that incorporate a thread lock will be
     thread-safe, and only the methods that are relevant to this package
     incorporate thread locks. For example, the __iter__ and __getitem__ methods
-    are thread-safe, which allows for thread-safe appending and copying of data.
+    are thread-safe, which allows for thread-safe read/write of data.
 
     FYI:
     >>> dir(MutableSequence)
