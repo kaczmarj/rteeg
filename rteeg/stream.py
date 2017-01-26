@@ -23,6 +23,7 @@ warnings.filterwarnings(action='always', module='rteeg')
 
 # MNE wants EEG values in volts.
 SCALINGS = {
+    # Scale of incoming data: factory by which to multiply to get volts.
     'volts': 1.,
     'millivolts': 1. / 1e+3,
     'microvolts': 1. / 1e+6,
@@ -50,8 +51,8 @@ def _get_stream_inlet(lsl_predicate):
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
         print("Connected to stream.")  # TODO: change this to logging.
-    elif not stream:  # This would never happen without a timeout.
-        raise ValueError("Zero streams match the given predicate.")
+    # elif not stream:  # This would never happen without a timeout.
+    #     raise ValueError("Zero streams match the given predicate.")
     else:
         raise ValueError("Multiple streams match the given predicate. Only one "
                          "stream must match the predicate.")
@@ -194,8 +195,8 @@ class EEGStream(BaseStream):
         not change. For example, if you call this method, wait 3 seconds, and
         call it again, it will say the latency is 3 seconds. Is it related to
         locking? Refreshing something about the last item in `data`? But the
-        lock releases after returning. Not sure how to replicate this bug. Lock
-        is not necessary here.
+        lock releases after returning. Not sure how to replicate this bug.
+        Probably related to I/O. Active thread does not switch until I/O?
         """
         return local_clock() - self.data[-1][-1]
 
@@ -255,9 +256,8 @@ class EEGStream(BaseStream):
             The EEG data.
         """
         raw_data = self.get_data(data_duration=data_duration)
-        # Add events if Markers stream was started.
         raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
-        # If user wants to apply ICA...
+
         if not apply_ica:
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
                                verbose=verbose)
