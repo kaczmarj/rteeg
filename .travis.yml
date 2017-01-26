@@ -42,4 +42,4 @@ script:
 
 after_success:
   # Run Code Coverage
-  - codecov
+  - bash <(curl -s https://codecov.io/bash)

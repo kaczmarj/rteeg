@@ -36,8 +36,7 @@ from .stream import EEGStream
 
 def _get_latest_timestamp(stream):
     """Get the last recorded timestamp from rteeg.EEGStream object."""
-    with stream.thread_lock:
-        return stream.data[-1][-1]
+    return stream.data[-1][-1]
 
 def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
                  pyqt_signal=None):

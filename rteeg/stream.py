@@ -85,10 +85,10 @@ def make_events(data, marker_stream, event_duration=0):
     # Get the markers between two times.
     lower_time_limit = data[-1, 0]
     upper_time_limit = data[-1, -1]
-    with marker_stream.thread_lock:
-        tmp = np.array([row[:] for row in marker_stream.data
-                        if upper_time_limit >= row[-1] >= lower_time_limit],
-                       dtype=np.int32)
+    # Copy markers into a Numpy ndarray.
+    tmp = np.array([row[:] for row in marker_stream.data
+                    if upper_time_limit >= row[-1] >= lower_time_limit],
+                   dtype=np.int32)
     # Pre-allocate array for speed.
     events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
     # If there is at least one marker ...
@@ -258,11 +258,16 @@ class EEGStream(BaseStream):
         # Add events if Markers stream was started.
         raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
         # If user wants to apply ICA...
-        if apply_ica and self.ica.current_fit != 'unfitted':
-            return self.ica.apply(raw)
-        else:
+        if not apply_ica:
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
                                verbose=verbose)
+        elif apply_ica and self.ica.current_fit == 'unfitted':
+            return io.RawArray(raw_data, self.info, first_samp=first_samp,
+                              verbose=verbose)
+        elif apply_ica and self.ica.current_fit != 'unfitted':
+            raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
+                              verbose=verbose)
+            return self.ica.apply(raw)
 
     def make_epochs(self, marker_stream, data_duration=None, events=None,
                     event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
@@ -377,9 +382,8 @@ class EEGStream(BaseStream):
                         pass
                 print("")
 
-            with self.thread_lock:
-                _data = np.array([r[:] for r in
-                                  self.data[start_index:end_index]]).T
+            _data = np.array([r[:] for r in
+                              self.data[start_index:end_index]]).T
 
             # Now we have the data array in _data. Use it to make instance of
             # mne.RawArray, and then we can compute the ICA on that instance.
