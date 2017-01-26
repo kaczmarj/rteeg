@@ -49,11 +49,11 @@ class BaseStream(object):
         RuntimeError if attempting to connect more than once.
         """
         if self.active:
-            raise RuntimeError("Stream already connected.")
+            raise RuntimeError("Stream already active.")
         self._thread = threading.Thread(target=target, name=name)
         self._thread.daemon = True
         self._thread.start()
-        self.active = True
+        self.active = True  # Does not mean that LSL stream is connected.
 
     def copy_data(self, index=None):
         """Copy `data` in a thread-safe manner.
@@ -61,7 +61,7 @@ class BaseStream(object):
         Parameters
         ----------
         index : int
-            Get last `index` items. By default, returns all items.
+            Return last `index` items. By default, returns all items.
         """
         if index is None:
             return [row[:] for row in self.data]
