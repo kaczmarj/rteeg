@@ -1,6 +1,6 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Tests for rteeg.stream.py"""
-from __future__ import division
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 
 import threading
 import time

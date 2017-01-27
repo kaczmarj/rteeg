@@ -1,4 +1,6 @@
-from __future__ import division, print_function
+"""Utilities for test scripts."""
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 
 from random import randint
 from threading import Thread, Event

@@ -1,6 +1,6 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Tests for rteeg.base.py"""
-from __future__ import division, print_function
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 import random
 import threading
 import time
