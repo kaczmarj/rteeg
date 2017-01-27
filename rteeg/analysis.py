@@ -165,10 +165,8 @@ class LoopAnalysis(object):
         """Stop the analysis loop."""
         self._kill_signal.set()
         self.running = False
-
         if self.show_window:
             self.window.worker.stop()
-
         logger.info("Loop of analysis stopped.")
 
 
@@ -178,19 +176,13 @@ class MainWindow(QtGui.QWidget):
                  parent=None):
         super(MainWindow, self).__init__(parent)
 
-        self.stream = stream
-        self.func = func
-        self.args = args
-        self.buffer_len = buffer_len
-        self.kill_signal = kill_signal
-
         self.feedback = QtGui.QLabel()
         self.feedback.setText("Waiting for feedback ...")
         self.feedback.setAlignment(QtCore.Qt.AlignCenter)
 
-        self.font = QtGui.QFont()
-        self.font.setPointSize(24)
-        self.feedback.setFont(self.font)
+        font = QtGui.QFont()
+        font.setPointSize(24)
+        self.feedback.setFont(font)
 
         self.layout = QtGui.QVBoxLayout()
         self.layout.addWidget(self.feedback)
@@ -199,11 +191,11 @@ class MainWindow(QtGui.QWidget):
         self.setWindowTitle("feedback")
         self.resize(300, 200)
 
-        self.worker = Worker(stream=self.stream,
-                             func=self.func,
-                             args=self.args,
-                             buffer_len=self.buffer_len,
-                             kill_signal=self.kill_signal)
+        self.worker = Worker(stream=stream,
+                             func=func,
+                             args=args,
+                             buffer_len=buffer_len,
+                             kill_signal=kill_signal)
         self.worker.refresh_signal.connect(self.update)
         self.worker.start()
 
