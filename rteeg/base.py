@@ -10,9 +10,9 @@ from rteeg.utils import logger
 class BaseStream(object):
     """Base class for recording streams of data."""
     def __init__(self):
+        self._active = False
         self._kill_signal = threading.Event()
         self.data = ThreadSafeList()
-        self.active = False
 
     def __del__(self):
         # Break out of the loop of data collection.
@@ -47,15 +47,14 @@ class BaseStream(object):
         ------
         RuntimeError if attempting to connect more than once.
         """
-        if self.active:
+        if self._active:
             raise RuntimeError("Stream already active.")
         self._thread = threading.Thread(target=target, name=name)
         self._thread.daemon = True
         self._thread.start()
-        self.active = True  # Does not mean that LSL stream is connected.
 
     def copy_data(self, index=None):
-        """Copy `data` in a thread-safe manner.
+        """Return deep copy `self.data`.
 
         Parameters
         ----------
