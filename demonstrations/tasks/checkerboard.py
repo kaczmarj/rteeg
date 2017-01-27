@@ -28,7 +28,7 @@ trial duration : int, float (defaults to 1.)
 inter-stimulus interval : int, float (defaults to .5)
     Duration of inter-stimulus interval in seconds.
 """
-from __future__ import division
+from __future__ import division, print_function
 
 import random
 import numpy as np
@@ -36,17 +36,14 @@ from pylsl import StreamInfo, StreamOutlet, local_clock
 
 from psychopy import core, event, gui, visual
 
-
 def build_checkerboard(dim):
     """Return two 2D ndarrays of shape (dim, dim). Both ndarrays have
     alternating ones and negative ones, but the order is switched between the
     ndarrays."""
-    board = np.ones((dim, dim),dtype=int)
-    board[1::2,::2] = -1
-    board[::2,1::2] = -1
-
+    board = np.ones((dim, dim), dtype=np.int32)
+    board[::2, ::2] = -1
+    board[1::2, 1::2] = -1
     return board, np.multiply(board, -1)
-
 
 # Setup LabStreamingLayer stream.
 info = StreamInfo(name='checkerboard_stream', type='Markers', channel_count=1,
