@@ -3,7 +3,7 @@
 import logging
 
 
-def create_logger():
+def _create_logger():
     # Create logger.
     logger = logging.getLogger('rteeg')
     logger.setLevel(logging.DEBUG)
@@ -22,4 +22,14 @@ def set_log_level(verbosity):
     logger.setLevel(verbosity)
 
 
-logger = create_logger()
+logger = _create_logger()
+
+# MNE wants EEG values in volts.
+SCALINGS = {
+    # Scale of incoming data: factory by which to multiply to get volts.
+    'volts': 1.,
+    'millivolts': 1. / 1e+3,
+    'microvolts': 1. / 1e+6,
+    'nanovolts': 1. / 1e+9,
+    'unknown': 1.,
+}
