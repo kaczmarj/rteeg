@@ -1,6 +1,6 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Classes to stream EEG data and event markers."""
-from __future__ import division, print_function
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 import datetime
 import numbers
 import time
@@ -13,7 +13,7 @@ import numpy as np
 from pylsl import StreamInlet, local_clock, resolve_bypred
 
 from rteeg import default_predicates
-from .base import BaseStream
+from rteeg.base import BaseStream
 
 # How much MNE talks.
 set_log_level(verbose='error')
@@ -57,6 +57,7 @@ def _get_stream_inlet(lsl_predicate):
         raise ValueError("Multiple streams match the given predicate. Only one "
                          "stream must match the predicate.")
     return inlet
+
 
 def make_events(data, marker_stream, event_duration=0):
     """Create array of events.
@@ -263,7 +264,7 @@ class EEGStream(BaseStream):
                                verbose=verbose)
         elif apply_ica and self.ica.current_fit == 'unfitted':
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
+                               verbose=verbose)
         elif apply_ica and self.ica.current_fit != 'unfitted':
             raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
                               verbose=verbose)

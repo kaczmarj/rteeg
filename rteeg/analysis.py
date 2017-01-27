@@ -1,42 +1,27 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
-"""Class to class a function each time a data buffer becomes full.
-
-If we wanted to create a model and apply it within the same experiment, how
-could that be done?
-    Have a model training block of trials at the beginning, and once the block
-    is over, get the data and event markers from that block. Take all the data
-    and make epochs using those events (that way, we are sure we are not
-    discarding good data). Preprocess accordingly (filter, ICA), and then
-    extract the features (e.g., first 15 PCA components of power spectral
-    density output). Cross validate to check model performance, and then train
-    the model with all of the data. Save the model as an object in the class,
-    and predict each upcoming trial. But before each prediction, must filter,
-    apply ICA, and extract features.
+"""Classes related to analysis loops.
 
 TODO
 ----
 1. Add a function that will display a feedback window so the user can design and
     debug their feedback window.
 """
-from __future__ import division, print_function
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 import numbers
 import sys
 from threading import Event, Thread
 import time
 
 from pylsl import local_clock
-try:
-    from PyQt4 import QtGui, QtCore
-except ImportError:
-    raise ImportError("Package PyQt4 not found. GUI functionality not "
-                      "available (i.e., LoopAnalysis(..., show_window=True)).")
+from PyQt4 import QtGui, QtCore
 
-from .stream import EEGStream
+from rteeg.stream import EEGStream
 
 
 def _get_latest_timestamp(stream):
     """Get the last recorded timestamp from rteeg.EEGStream object."""
     return stream.data[-1][-1]
+
 
 def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
                  pyqt_signal=None):
@@ -83,7 +68,6 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
                 t_zero = t_one
                 func(*args)
             time.sleep(sleep_time)
-
 
 
 class LoopAnalysis(object):
@@ -187,7 +171,6 @@ class LoopAnalysis(object):
         print("Loop of analysis stopped.")
 
 
-
 class MainWindow(QtGui.QWidget):
     """Window that displays feedback."""
     def __init__(self, stream, func, args, buffer_len, kill_signal,
@@ -226,7 +209,6 @@ class MainWindow(QtGui.QWidget):
     def update(self, text):
         """Docstring here"""
         self.feedback.setText(text)
-
 
 
 class Worker(QtCore.QThread):

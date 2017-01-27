@@ -1,6 +1,6 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Base class for recording streams of data."""
-from __future__ import division, print_function
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 import collections
 import threading
 import warnings
@@ -71,7 +71,6 @@ class BaseStream(object):
                 warnings.warn("Last {} samples were requested, but only {} are "
                               "present.".format(index, current_max))
             return [row[:] for row in self.data[-index:]]
-
 
 
 class ThreadSafeList(collections.MutableSequence):
