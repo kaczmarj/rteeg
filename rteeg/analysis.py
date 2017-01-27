@@ -16,6 +16,7 @@ from pylsl import local_clock
 from PyQt4 import QtGui, QtCore
 
 from rteeg.stream import EEGStream
+from rteeg.utils import logger
 
 
 def _get_latest_timestamp(stream):
@@ -168,7 +169,7 @@ class LoopAnalysis(object):
         if self.show_window:
             self.window.worker.stop()
 
-        print("Loop of analysis stopped.")
+        logger.info("Loop of analysis stopped.")
 
 
 class MainWindow(QtGui.QWidget):

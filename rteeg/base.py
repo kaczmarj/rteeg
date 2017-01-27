@@ -3,9 +3,8 @@
 from __future__ import division, print_function, absolute_import
 import collections
 import threading
-import warnings
 
-warnings.filterwarnings(action='always', module='rteeg')
+from rteeg.utils import logger
 
 
 class BaseStream(object):
@@ -68,8 +67,8 @@ class BaseStream(object):
         else:
             current_max = len(self.data)
             if index > current_max:
-                warnings.warn("Last {} samples were requested, but only {} are "
-                              "present.".format(index, current_max))
+                logger.warning("Last {} samples were requested, but only {} "
+                               "are present.".format(index, current_max))
             return [row[:] for row in self.data[-index:]]
 
 

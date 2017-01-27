@@ -14,12 +14,13 @@ from pylsl import StreamInlet, local_clock, resolve_bypred
 
 from rteeg import default_predicates
 from rteeg.base import BaseStream
+from rteeg.utils import logger
 
 # How much MNE talks.
 set_log_level(verbose='error')
 
 # Always print warnings.
-warnings.filterwarnings(action='always', module='rteeg')
+# warnings.filterwarnings(action='always', module='rteeg')
 
 # MNE wants EEG values in volts.
 SCALINGS = {
@@ -47,15 +48,17 @@ def _get_stream_inlet(lsl_predicate):
     inlet : pylsl.StreamInlet
         The LSL stream that matches the given predicate.
     """
-    stream = resolve_bypred(lsl_predicate)  # Should timeout be specified?
+    stream = resolve_bypred(lsl_predicate)  # Times out after ~ 1 year.
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
-        print("Connected to stream.")  # TODO: change this to logging.
+        logger.info("Connected to stream.")
     # elif not stream:  # This would never happen without a timeout.
     #     raise ValueError("Zero streams match the given predicate.")
     else:
-        raise ValueError("Multiple streams match the given predicate. Only one "
-                         "stream must match the predicate.")
+        msg = ("Multiple streams match the given predicate. Only one "
+               "stream must match the predicate.")
+        logger.error(msg)
+        raise ValueError(msg)
     return inlet
 
 
@@ -93,7 +96,7 @@ def make_events(data, marker_stream, event_duration=0):
                    dtype=np.int32)
     # Pre-allocate array for speed.
     events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
-    # If there is at least one marker ...
+    # If there is at least one marker:
     if tmp.shape[0] > 0:
         for event_index, (marker_int, timestamp) in enumerate(tmp):
             # Get the index where this marker happened in the EEG data.
@@ -102,6 +105,7 @@ def make_events(data, marker_stream, event_duration=0):
             events[event_index, :] = eeg_index, event_duration, marker_int
     else:
         # Make empty events array.
+        logger.debug("Creating empty events array.")
         return np.array([[0, 0, 0]])
     return events
 
@@ -123,10 +127,12 @@ class EEGStream(BaseStream):
             try:
                 self.lsl_predicate = default_predicates.eeg[eeg_system]
             except KeyError:
-                raise ValueError("The `eeg_system` {} has no LabStreamingLayer "
-                                 "predicate defined in `default_predicates`. "
-                                 "Without a valid predicate, streams cannot be "
-                                 "found.".format(self.eeg_system))
+                msg = ("The `eeg_system` {} has no LabStreamingLayer "
+                       "predicate defined in `default_predicates`. "
+                       "Without a valid predicate, streams cannot be "
+                       "found.".format(self.eeg_system))
+                logger.error(msg)
+                raise ValueError(msg)
 
         self._stream_inlet = None
         self._eeg_unit = 'unknown'
@@ -178,8 +184,8 @@ class EEGStream(BaseStream):
             self.info = create_info(ch_names=ch_names,
                                     sfreq=sfreq, ch_types=ch_types,
                                     montage=None)
-            warnings.warn("Could not find montage for {}"
-                          "".format(self.eeg_system))
+            logger.warning("Could not find montage for {}"
+                           "".format(self.eeg_system))
 
         # Add time of recording.
         dt = datetime.datetime.now()
@@ -398,10 +404,10 @@ class EEGStream(BaseStream):
             else:
                 self.raw_for_ica = io.RawArray(_data, self.info)
 
-        print("Computing ICA solution ...")
+        logging.info("Computing ICA solution ...")
         t_0 = local_clock()
         self.ica.fit(self.raw_for_ica.copy())  # Fits in-place.
-        print("Finished in {:.2f} s".format(local_clock() - t_0))
+        logging.info("Finished in {:.2f} s".format(local_clock() - t_0))
 
     def viz_ica(self, plot='components'):
         """Visualize data with components removed.
@@ -441,7 +447,8 @@ class EEGStream(BaseStream):
             if not self.ica.exclude:
                 warnings.warn("No ICA components were marked for removal. EEG "
                               "data has not been changed.")
-            print("Components to be removed: {}".format(self.ica.exclude))
+            logging.info("Components marked for removal: {}"
+                         "".format(self.ica.exclude))
             return self.ica.apply(self.raw_for_ica.copy()).plot()
 
 
