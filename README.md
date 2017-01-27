@@ -1,17 +1,10 @@
 # Real-Time EEG
 
 [![Build Status](https://travis-ci.org/kaczmarj/rteeg.svg?branch=master)](https://travis-ci.org/kaczmarj/rteeg)
-[![Coverage](https://codecov.io/gh/kaczmarj/rteeg/branch/master/graph/badge.svg)](https://codecov.io/gh/kaczmarj/rteeg/branch/master)
+[![Code Coverage](https://codecov.io/gh/kaczmarj/rteeg/branch/master/graph/badge.svg)](https://codecov.io/gh/kaczmarj/rteeg/branch/master)
 
 
-Python module to stream and analyze EEG data in real-time.
-
-
-Dependencies
-------------
-
-- [LabStreamingLayer](https://github.com/sccn/labstreaminglayer) to stream EEG data and event triggers.
-- [MNE-Python](https://github.com/mne-tools/mne-python) to analyze data.
+_rteeg_ provides the infrastructure to access EEG data in Python in real-time. The package uses [LabStreamingLayer](https://github.com/sccn/labstreaminglayer) to stream EEG data and event markers and [MNE-Python](https://github.com/mne-tools/mne-python) to analyze data. TCP/IP support will be available soon.
 
 
 How it works
