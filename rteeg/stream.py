@@ -12,25 +12,12 @@ from mne.utils import ProgressBar
 import numpy as np
 from pylsl import StreamInlet, local_clock, resolve_bypred
 
-from rteeg import default_predicates
 from rteeg.base import BaseStream
-from rteeg.utils import logger
+from rteeg.default_predicates import eeg_predicates, marker_predicates
+from rteeg.utils import logger, SCALINGS
 
 # How much MNE talks.
 set_log_level(verbose='error')
-
-# Always print warnings.
-# warnings.filterwarnings(action='always', module='rteeg')
-
-# MNE wants EEG values in volts.
-SCALINGS = {
-    # Scale of incoming data: factory by which to multiply to get volts.
-    'volts': 1.,
-    'millivolts': 1. / 1e+3,
-    'microvolts': 1. / 1e+6,
-    'nanovolts': 1. / 1e+9,
-    'unknown': 1.,
-}
 
 
 def _get_stream_inlet(lsl_predicate):
@@ -41,7 +28,7 @@ def _get_stream_inlet(lsl_predicate):
     ----------
     lsl_predicate : str
         Predicate used to find LabStreamingLayer stream. See
-        `default_eeg_predicates.py` for more info.
+        `default_predicates.py` for more info.
 
     Returns
     -------
@@ -111,28 +98,27 @@ def make_events(data, marker_stream, event_duration=0):
 
 
 class EEGStream(BaseStream):
-    """
+    """Class to receive EEG data.
+
     Parameters
     ----------
-    eeg_system : {'Enobio32'}
+    key : str
         The EEG system being used. This name indicates which predicate to use
         in `default_predicates.py`.
     lsl_predicate : str
     """
-    def __init__(self, eeg_system, lsl_predicate=None):
+    def __init__(self, key):
         super(EEGStream, self).__init__()
-        self.eeg_system = eeg_system
-        self.lsl_predicate = lsl_predicate
-        if self.lsl_predicate is None:
-            try:
-                self.lsl_predicate = default_predicates.eeg[eeg_system]
-            except KeyError:
-                msg = ("The `eeg_system` {} has no LabStreamingLayer "
-                       "predicate defined in `default_predicates`. "
-                       "Without a valid predicate, streams cannot be "
-                       "found.".format(self.eeg_system))
-                logger.error(msg)
-                raise ValueError(msg)
+        self.key = key
+        try:
+            self.lsl_predicate = eeg_predicates[key]
+        except KeyError:
+            msg = ("The `key` {} has no LabStreamingLayer "
+                   "predicate defined in `default_predicates.py`. "
+                   "Without a valid predicate, the stream cannot be "
+                   "found.".format(self.key))
+            logger.error(msg)
+            raise KeyError(msg)
 
         self._stream_inlet = None
         self._eeg_unit = 'unknown'
@@ -146,6 +132,7 @@ class EEGStream(BaseStream):
     def _connect(self):
         """Connect to stream and record data to list."""
         self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
+        self._active = True
 
         # Extract stream info.
         info = self._stream_inlet.info()
@@ -179,13 +166,13 @@ class EEGStream(BaseStream):
         try:
             self.info = create_info(ch_names=ch_names,
                                     sfreq=sfreq, ch_types=ch_types,
-                                    montage=self.eeg_system)
+                                    montage=self.key)
         except ValueError:
             self.info = create_info(ch_names=ch_names,
                                     sfreq=sfreq, ch_types=ch_types,
                                     montage=None)
             logger.warning("Could not find montage for {}"
-                           "".format(self.eeg_system))
+                           "".format(self.key))
 
         # Add time of recording.
         dt = datetime.datetime.now()
@@ -333,18 +320,6 @@ class EEGStream(BaseStream):
 
         Components marked for removal can be accessed with self.ica.exclude.
 
-        Use example:
-
-        >>> rt = Stream()
-        >>> rt.connect(eeg=True)  # Connect to LSL stream of EEG data.
-        >>> rt.fit_ica(10)  # Fit the ICA on the next 10 seconds of data.
-        >>> # Plot the ICA sources and click on components to mark for removal
-        >>> rt.ica.plot_sources(rt.raw_for_ica)
-        >>> # Assuming at least one component was marked for removal, visualize
-        >>> # the effects of removing the component(s) in raw data.
-        >>> rt.ica.apply(rt.raw_for_ica).plot()
-
-
         data : int, float, mne.RawArray
             The duration of previous or incoming data to use to fit the ICA, or
             an mne.RawArray object of data.
@@ -387,7 +362,7 @@ class EEGStream(BaseStream):
                         pbar.update(len(self.data) - start_index)
                     except ValueError:
                         pass
-                print("")
+                print("")  # Get onto new line after progress bar finishes.
 
             _data = np.array([r[:] for r in
                               self.data[start_index:end_index]]).T
@@ -454,14 +429,21 @@ class EEGStream(BaseStream):
 
 class MarkerStream(BaseStream):
     """Docstring here"""
-    def __init__(self, lsl_predicate_key='default'):
+    def __init__(self, key='default'):
         super(MarkerStream, self).__init__()
-        self.lsl_predicate_key = lsl_predicate_key
-        self.lsl_predicate = default_predicates.markers[self.lsl_predicate_key]
-        self._stream_inlet = None
+        try:
+            self.lsl_predicate = marker_predicates[key]
+        except KeyError:
+            msg = ("The `key` {} has no LabStreamingLayer "
+                   "predicate defined in `default_predicates.py`. "
+                   "Without a valid predicate, the stream cannot be "
+                   "found.".format(key))
+            logger.error(msg)
+            raise KeyError(msg)
         self.connect(self._connect, 'Marker-data')
 
     def _connect(self):
         """Connect to stream and record data to list."""
         self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
+        self._active = True
         self._record_data_indefinitely(self._stream_inlet)
