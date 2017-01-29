@@ -36,8 +36,8 @@ def test_LoopAnalysis():
     assert len(list_) == list_len, "Analysis function called incorrect # of times."
 
     # Attempt to test GUI. This might fail.
-    window = MainWindow(loop.stream, loop.func, loop.args, loop.buffer_len,
-                    loop._kill_signal)
+    # window = MainWindow(loop.stream, loop.func, loop.args, loop.buffer_len,
+    #                     loop._kill_signal)
 
     # Clean up.
     eeg_1.stop()
