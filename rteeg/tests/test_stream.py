@@ -39,7 +39,7 @@ def test_get_stream_inlet():
 
 def test_make_events():
     eeg_out = SyntheticData("EEG", 32, 100)
-    eeg = EEGStream(eeg_system='Enobio32', lsl_predicate="type='EEG'")
+    eeg = EEGStream()
     eeg.data = eeg_out.create_data(5000)
 
     marker_outlet = SyntheticData("Markers", 1, 1)
@@ -67,7 +67,7 @@ def test_EEGStream():
     data_len = 5000
     eeg_out = SyntheticData("EEG", n_chs, sfreq, send_data=False)
     n_threads_1 = threading.active_count()
-    eeg = EEGStream("Test", lsl_predicate="type='EEG'")
+    eeg = EEGStream()
     time.sleep(5.)  # Allow some time for EEG stream to be found.
     n_threads_2 = threading.active_count()
 
