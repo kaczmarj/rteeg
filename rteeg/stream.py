@@ -379,10 +379,10 @@ class EEGStream(BaseStream):
             else:
                 self.raw_for_ica = io.RawArray(_data, self.info)
 
-        logging.info("Computing ICA solution ...")
+        logger.info("Computing ICA solution ...")
         t_0 = local_clock()
         self.ica.fit(self.raw_for_ica.copy())  # Fits in-place.
-        logging.info("Finished in {:.2f} s".format(local_clock() - t_0))
+        logger.info("Finished in {:.2f} s".format(local_clock() - t_0))
 
     def viz_ica(self, plot='components'):
         """Visualize data with components removed.
@@ -394,7 +394,7 @@ class EEGStream(BaseStream):
         this function again, and change the selection on the plot of latent ICA
         components.
 
-        plot : {'components', 'scalp_components', 'cleaned_data'}
+        plot : {'components', 'map_components', 'cleaned_data'}
             'components' : Plot the latent ICA components. Components to be
                            removed are selected on this plot.
             'map_components' : Plot the distribution of components across
@@ -414,16 +414,21 @@ class EEGStream(BaseStream):
                                "fit ICA does not exist. Fit ICA before "
                                "calling this function again.")
 
+        if plot not in ['components', 'map_components', 'cleaned_data']:
+            raise ValueError("Argument '{}' not recognized. Only 'components', "
+                             "'map_components', and 'cleaned_data' are allowed."
+                             "".format(plot))
+
         if plot == 'components':
             return self.ica.plot_sources(self.raw_for_ica)
         elif plot == 'map_components':
             return self.ica.plot_components()
         elif plot == 'cleaned_data':
             if not self.ica.exclude:
-                warnings.warn("No ICA components were marked for removal. EEG "
+                logger.warning("No ICA components were marked for removal. EEG "
                               "data has not been changed.")
-            logging.info("Components marked for removal: {}"
-                         "".format(self.ica.exclude))
+            logger.info("Components marked for removal: {}"
+                        "".format(self.ica.exclude))
             return self.ica.apply(self.raw_for_ica.copy()).plot()
 
 
