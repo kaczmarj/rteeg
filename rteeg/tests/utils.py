@@ -10,7 +10,7 @@ from pylsl import local_clock, StreamInfo, StreamOutlet
 
 
 def check_equal(list_):
-    """Return True if all values in an iterator are equal."""
+    """Return True if two lists are equivalent."""
     return list_[1:] == list_[:-1]
 
 
@@ -37,7 +37,7 @@ class SyntheticData(object):
             for c in ch_names:
                 info.desc().append_child("channel")\
                     .append_child_value("name", c)\
-                    .append_child_value("unit", "millivolts")\
+                    .append_child_value("unit", "volts")\
                     .append_child_value("type", "EEG")
         self.outlet = StreamOutlet(info)
         if self.send_data:
@@ -47,8 +47,8 @@ class SyntheticData(object):
 
     def _send_data(self):
         sleep_time = 1. / self.sfreq
-        sample = [1] * self.n_chs
         while not self.event.is_set():
+            sample = [randint(1, 100)] * self.n_chs
             self.outlet.push_sample(sample)
             time.sleep(sleep_time)
 
