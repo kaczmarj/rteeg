@@ -49,10 +49,10 @@ class BaseStream(object):
         """
         if self._active:
             raise RuntimeError("Stream already active.")
-        self._thread = threading.Thread(target=target, name=name)
-        self._thread.daemon = True
-        self._thread.start()
-        self._active = True
+        else:
+            self._thread = threading.Thread(target=target, name=name)
+            self._thread.daemon = True
+            self._thread.start()
 
     def copy_data(self, index=None):
         """Return deep copy `self.data`.
