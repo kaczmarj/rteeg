@@ -13,7 +13,8 @@ from pylsl import StreamInlet
 import pytest
 
 from rteeg import EEGStream, MarkerStream
-from rteeg.stream import _get_stream_inlet, make_events, SCALINGS
+from rteeg.stream import _get_stream_inlet, make_events
+from rteeg.utils import SCALINGS
 from rteeg.tests.utils import SyntheticData, true_markers
 
 
