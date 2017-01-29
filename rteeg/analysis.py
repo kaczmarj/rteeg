@@ -19,11 +19,6 @@ from rteeg.stream import EEGStream
 from rteeg.utils import logger
 
 
-def _get_latest_timestamp(stream):
-    """Get the last recorded timestamp from rteeg.EEGStream object."""
-    return stream.data[-1][-1]
-
-
 def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
                  pyqt_signal=None):
     """Call `func(*args)` each time `stream._eeg_data` increases by
@@ -54,7 +49,6 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
 
     if show_window:
         while not kill_signal:
-            # t_one = _get_latest_timestamp(stream)
             t_one = stream.data[-1][-1]
             if t_one - t_zero >= buffer_len:
                 t_zero = t_one
@@ -63,7 +57,6 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
             time.sleep(sleep_time)
     else:
         while not kill_signal.is_set():
-            # t_one = _get_latest_timestamp(stream)
             t_one = stream.data[-1][-1]
             if t_one - t_zero >= buffer_len:
                 t_zero = t_one
@@ -117,7 +110,7 @@ class LoopAnalysis(object):
                             "".format(type(args)))
 
         self.stream = stream
-        self.buffer_len = buffer_len
+        self.buffer_len = float(buffer_len)
         self.func = func
         self.args = args
         self.show_window = show_window
@@ -125,19 +118,8 @@ class LoopAnalysis(object):
         self.running = False
         self._kill_signal = Event()
 
-        if not self.show_window:
-            # Start the analysis loop in another thread.
-            self._loop_analysis_thread = Thread(target=self._loop_analysis,
-                                                name="Analysis-loop")
-            self._loop_analysis_thread.daemon = True
-            self._loop_analysis_thread.start()
-
-        else:
-            self._loop_analysis_show_window()
-
     def _loop_analysis(self):
         """Call a function every time a buffer reaches `self.buffer_len`."""
-        self.running = True
         _loop_worker(stream=self.stream, func=self.func, args=self.args,
                      buffer_len=self.buffer_len, kill_signal=self._kill_signal,
                      show_window=self.show_window)
@@ -157,17 +139,36 @@ class LoopAnalysis(object):
                                  self.args, self.buffer_len,
                                  self._kill_signal)
         self.window.show()
-        # Stop the AnalysisLoop if MainWindow is closed.
+        # Stop the analysis loop if MainWindow is closed.
         app.aboutToQuit.connect(self.stop)
         sys.exit(app.exec_())
 
+    def start(self):
+        """Start the analysis loop."""
+        if not self.running:
+            self.running = True
+            if not self.show_window:
+                # Start the analysis loop in another thread.
+                self._loop_analysis_thread = Thread(target=self._loop_analysis,
+                                                    name="Analysis-loop")
+                self._loop_analysis_thread.daemon = True
+                self._loop_analysis_thread.start()
+
+            else:
+                self._loop_analysis_show_window()
+        else:
+            logger.info("Loop of analysis already running.")
+
     def stop(self):
         """Stop the analysis loop."""
-        self._kill_signal.set()
-        self.running = False
-        if self.show_window:
-            self.window.worker.stop()
-        logger.info("Loop of analysis stopped.")
+        if self.running:
+            self._kill_signal.set()
+            self.running = False
+            if self.show_window:
+                self.window.worker.stop()
+            logger.info("Loop of analysis stopped.")
+        else:
+            logger.info("Loop of analysis not running. Nothing to stop.")
 
 
 class MainWindow(QtGui.QWidget):
