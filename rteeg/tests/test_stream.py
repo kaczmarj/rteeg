@@ -76,7 +76,7 @@ def test_EEGStream():
     # Check for mne.Info object.
     assert isinstance(eeg.info, meas_info.Info), "Not mne.Info object."
     # Check for correct EEG unit.
-    assert eeg._eeg_unit == "millivolts", "Wrong EEG unit."
+    assert eeg._eeg_unit == "volts", "Wrong EEG unit."
     # Check for correct number of channels.
     assert len(eeg.info['ch_names']) == n_chs + 1, "Wrong number of channels."
     # Check for stim channel.
