@@ -105,9 +105,8 @@ class EEGStream(BaseStream):
     key : str
         The EEG system being used. This name indicates which predicate to use
         in `default_predicates.py`.
-    lsl_predicate : str
     """
-    def __init__(self, key):
+    def __init__(self, key='default'):
         super(EEGStream, self).__init__()
         self.key = key
         try:
