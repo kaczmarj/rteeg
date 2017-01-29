@@ -131,11 +131,44 @@ def test_EEGStream():
     # Check number of events.
     assert np.array_equal(epochs.events, true_markers), "Events incorrect."
 
-    # TODO: test EEGStream.fit_ica() and EEGStream.viz_ica()
-
     # Clean up.
     eeg_out.stop()
     marker_out.stop()
+    del eeg_out
+    del marker_out
+
+    # TODO: test EEGStream.fit_ica() and EEGStream.viz_ica()
+    # Check EEGStream.fit_ica()
+    eeg_out = SyntheticData("EEG", 32, 100, send_data=True)
+    eeg = EEGStream()
+    time.sleep(5.)
+
+    # Test EEGStream.fit_ica().
+    data_dur = 5
+    eeg.fit_ica(data_dur, when='next', warm_start=False)
+    eeg.fit_ica(data_dur, when='previous', warm_start=False)
+    len1 = len(eeg.raw_for_ica)
+    eeg.fit_ica(data_dur, when='next', warm_start=True)
+    len2 = len(eeg.raw_for_ica)
+    eeg.fit_ica(data_dur, when='previous', warm_start=True)
+    len3 = len(eeg.raw_for_ica)
+
+    assert len1 != 0, "fit_ica did not save raw object to raw_for_ica."
+    assert len2 == len1 * 2, "'next' did not use warm start."
+    assert len3 == len1 * 3, "'previous' did not use warm start."
+
+    # Check EEGStream.viz_ica().
+    eeg.viz_ica()
+    eeg.viz_ica('cleaned_data')
+    eeg.ica.exclude = [1, 2]
+    eeg.viz_ica('cleaned_data')
+    with pytest.raises(RuntimeError):
+        eeg.viz_ica('map_components')  # No digitization points found.
+
+    # Clean up.
+    eeg_out.stop()
+    del eeg_out
+
 
 def test_MarkerStream():
     marker_out = SyntheticData("Markers", 1, 1, send_data=False)
