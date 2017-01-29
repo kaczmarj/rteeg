@@ -53,6 +53,7 @@ class BaseStream(object):
             self._thread = threading.Thread(target=target, name=name)
             self._thread.daemon = True
             self._thread.start()
+            self._active = True
 
     def copy_data(self, index=None):
         """Return deep copy `self.data`.
