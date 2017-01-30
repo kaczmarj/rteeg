@@ -1,9 +1,8 @@
 sudo: required
-dist: trusty
+dist: trusty  # Ubuntu 14.04 LTS
 branches:
   only:
-    # Only build on pushes or pull requests to master branch.
-    - master
+    - master  # Only build on pushes or pull requests to master branch.
 language: python
 python:
   - "2.7"
@@ -19,7 +18,7 @@ before_install:
   # Install scipy/numpy/pyqt dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran qt5-default
   - pip install pytest-cov scipy
-  # Download SIP and PyQt5 source, and build. In Python3, can use pip.
+  # Download SIP and PyQt5 source, and build.
   - cd ..
   - curl -L -O https://sourceforge.net/projects/pyqt/files/sip/sip-4.19/sip-4.19.tar.gz
   - tar -xvf sip-4.19.tar.gz
