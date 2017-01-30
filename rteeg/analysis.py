@@ -13,7 +13,8 @@ from threading import Event, Thread
 import time
 
 from pylsl import local_clock
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtGui, QtCore
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
 
 from rteeg.stream import EEGStream
 from rteeg.utils import logger
@@ -132,9 +133,9 @@ class LoopAnalysis(object):
         in the feedback window. This string can include HTML and CSS, though not
         all CSS is supported. See PyQt's stylesheet.
         """
-        app = QtGui.QApplication.instance()
+        app = QApplication.instance()
         if not app:
-            app = QtGui.QApplication(sys.argv)
+            app = QApplication(sys.argv)
         self.window = MainWindow(self.stream, self.func,
                                  self.args, self.buffer_len,
                                  self._kill_signal)
@@ -171,13 +172,13 @@ class LoopAnalysis(object):
             logger.info("Loop of analysis not running. Nothing to stop.")
 
 
-class MainWindow(QtGui.QWidget):
+class MainWindow(QWidget):
     """Window that displays feedback."""
     def __init__(self, stream, func, args, buffer_len, kill_signal,
                  parent=None):
         super(MainWindow, self).__init__(parent)
 
-        self.feedback = QtGui.QLabel()
+        self.feedback = QLabel()
         self.feedback.setText("Waiting for feedback ...")
         self.feedback.setAlignment(QtCore.Qt.AlignCenter)
 
@@ -185,7 +186,7 @@ class MainWindow(QtGui.QWidget):
         font.setPointSize(24)
         self.feedback.setFont(font)
 
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = QVBoxLayout()
         self.layout.addWidget(self.feedback)
 
         self.setLayout(self.layout)
@@ -209,9 +210,8 @@ class Worker(QtCore.QThread):
     """Updates feedback in separate QThread."""
     refresh_signal = QtCore.pyqtSignal(str)
 
-    def __init__(self, stream, func, args, buffer_len, kill_signal,
-                 parent=None):
-        super(Worker, self).__init__(parent)
+    def __init__(self, stream, func, args, buffer_len, kill_signal):
+        super(Worker, self).__init__()
 
         self.stream = stream
         self.func = func
