@@ -10,11 +10,10 @@ python:
   - "3.6"
 before_install:
   - sudo apt-get -qq update
-  # Install scipy/numpy dependencies.
-  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
+  # Install scipy/numpy/qt dependencies.
+  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran qt5-default
   - pip install pytest-cov scipy
-  # Download PyQt4 source and build. Is there a faster way?
-  # At the least, move this to a bash script.
+  # Download SIP and PyQt5 source, and build. In Python3, can use pip.
   - cd ..
   - curl -L -O https://sourceforge.net/projects/pyqt/files/sip/sip-4.19/sip-4.19.tar.gz
   - tar -xvf sip-4.19.tar.gz
