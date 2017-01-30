@@ -11,7 +11,10 @@ python:
   - "3.5"
   - "3.6"
 before_install:
-  - "export DISPLAY=:99.0"  # To avoid matplotlib errors.
+  # To avoid matplotlib errors.
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+  - sleep 3 # Give xvfb some time to start.
   - sudo apt-get update -qq
   # Install scipy/numpy/pyqt dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran qt5-default
