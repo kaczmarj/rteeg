@@ -1,3 +1,5 @@
+sudo: required
+dist: trusty
 branches:
   only:
     # Only build on pushes or pull requests to master branch.
@@ -9,9 +11,8 @@ python:
   - "3.5"
   - "3.6"
 before_install:
-  - sudo add-apt-repository --yes ppa:canonical-qt5-edgers/ubuntu1204-qt5
-  - sudo apt-get update
-  - sudo apt-get qtbase-opensource-src
+  # - sudo add-apt-repository --yes ppa:ubuntu-sdk-team/ppa
+  - sudo apt-get update -qq
   # - sudo apt-get install -qq qt5-qmake qtbase5-dev qtdeclarative5-dev libqt5webkit5-dev libsqlite3-dev
   # Install scipy/numpy dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
