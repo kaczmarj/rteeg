@@ -24,7 +24,7 @@ curl -L -O --retry-delay 5 --retry 5 $PYQT_URL
 tar -xvf $PYQT_FILE
 cd ${PYQT_FILE%.*.*}
 python configure.py --confirm-license
-travis_wait make -j 2  # travis_wait times out at 20 min by default.
+make -j 2
 sudo make install
 
 cd ../rteeg
