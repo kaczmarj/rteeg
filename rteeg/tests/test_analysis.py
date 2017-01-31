@@ -6,7 +6,6 @@ import sys
 import threading
 import time
 
-from pytestqt import qtbot
 from PyQt5.QtWidgets import QApplication
 
 from rteeg import EEGStream, LoopAnalysis
@@ -43,7 +42,7 @@ def test_LoopAnalysis():
     # Clean up.
     eeg_1.stop()
 
-def test_MainWindow(qtbot):
+def test_MainWindow():
     eeg_1 = SyntheticData("EEG", 32, 100, send_data=True)
     eeg = EEGStream()
     time.sleep(5.)  # Wait to find stream.
