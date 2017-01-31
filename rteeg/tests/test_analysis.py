@@ -42,20 +42,20 @@ def test_LoopAnalysis():
     # Clean up.
     eeg_1.stop()
 
-def test_MainWindow():
-    eeg_1 = SyntheticData("EEG", 32, 100, send_data=True)
-    eeg = EEGStream()
-    time.sleep(5.)  # Wait to find stream.
-
-    event = threading.Event()
-    app = QApplication.instance()
-    if not app:
-        app = QApplication(sys.argv)
-
-    # Instantiate window.
-    window = MainWindow(eeg, func, (), 2, event)
-    window.show()
-    time.sleep(5.)  # Will sleeping allow the loop worker to work?
-
-    # Clean up.
-    eeg_1.stop()
+# def test_MainWindow():
+#     eeg_1 = SyntheticData("EEG", 32, 100, send_data=True)
+#     eeg = EEGStream()
+#     time.sleep(5.)  # Wait to find stream.
+#
+#     event = threading.Event()
+#     app = QApplication.instance()
+#     if not app:
+#         app = QApplication(sys.argv)
+#
+#     # Instantiate window.
+#     window = MainWindow(eeg, func, (), 2, event)
+#     window.show()
+#     time.sleep(5.)  # Will sleeping allow the loop worker to work?
+#
+#     # Clean up.
+#     eeg_1.stop()
