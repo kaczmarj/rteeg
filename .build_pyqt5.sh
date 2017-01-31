@@ -21,7 +21,7 @@ sudo make install
 cd ..
 
 # Download PyQt5 source, and build.
-curl -L -O --curl --retry 5 $PYQT_URL
+curl -L -O --retry 5 $PYQT_URL
 tar -xvf $PYQT_FILE
 cd ${PYQT_FILE%.*.*}
 python configure.py --confirm-license
