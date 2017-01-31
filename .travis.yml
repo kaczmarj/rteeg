@@ -16,16 +16,17 @@ before_install:
   - sleep 3 # Give xvfb some time to start.
   - sudo apt-get update -qq
   # Install scipy/numpy/pyqt dependencies.
-  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
+  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran qt5-default
   - pip install pytest-cov scipy
   - bash -e .build_pyqt5.sh
 install:
   # Install dependencies.
   - pip install -r requirements.txt
 # Command to run tests.
+before_script:
+  - bash -e .build_pyqt5.sh
 script:
   - py.test --cov=./
-
 after_success:
   # Run Code Coverage
   - bash <(curl -s https://codecov.io/bash)
