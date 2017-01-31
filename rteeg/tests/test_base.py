@@ -96,6 +96,7 @@ def test_ThreadSafeList():
     assert data[-3:] == [100, 101, 102], "extend method broken."
     data[-1] = 1234
     assert data[-1] == 1234, "__setitem__ method broken"
+    print(data)
     # Clean up.
     data = None
     iterable = None
