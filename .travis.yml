@@ -20,14 +20,14 @@ before_install:
   - pip install pytest-cov scipy
   # Download SIP and PyQt5 source, and build.
   - cd ..
-  - curl -L -O https://sourceforge.net/projects/pyqt/files/sip/sip-4.19/sip-4.19.tar.gz
+  - curl -L -O --retry 5 https://sourceforge.net/projects/pyqt/files/sip/sip-4.19/sip-4.19.tar.gz
   - tar -xvf sip-4.19.tar.gz
   - cd sip-4.19
   - python configure.py
   - make -j 2
   - sudo make install
   - cd ..
-  - curl -L -O https://sourceforge.net/projects/pyqt/files/PyQt5/PyQt-5.7.1/PyQt5_gpl-5.7.1.tar.gz
+  - curl -L -O --curl 5 https://sourceforge.net/projects/pyqt/files/PyQt5/PyQt-5.7.1/PyQt5_gpl-5.7.1.tar.gz
   - tar -xvf PyQt5_gpl-5.7.1.tar.gz
   - cd PyQt5_gpl-5.7.1
   - python configure.py --confirm-license
@@ -36,7 +36,6 @@ before_install:
   - cd ../rteeg
   # Test install.
   - python -c 'from PyQt5 import QtCore, QtGui, QtWidgets'
-
 install:
   # Install dependencies.
   - pip install -r requirements.txt
