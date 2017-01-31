@@ -6,9 +6,17 @@ import sys
 import threading
 import time
 
-from rteeg.analysis import LoopAnalysis, MainWindow
-from rteeg.stream import EEGStream
+from pytestqt import qtbot
+from PyQt5.QtWidgets import QApplication
+
+from rteeg import EEGStream, LoopAnalysis
+from rteeg.analysis import MainWindow
 from rteeg.tests.utils import SyntheticData
+
+list_ = []  # Append to this list with each call; query len after end of loop.
+def func(arg):
+    list_.append(arg)
+    return "TEST {}".format(len(list_))
 
 def test_LoopAnalysis():
     """Test of rteeg.analysis.LoopAnalysis"""
@@ -18,12 +26,9 @@ def test_LoopAnalysis():
     eeg = EEGStream(key='default')
     time.sleep(5.)
     # Define analysis function.
-    list_ = []  # Append to this list with each call; query len after end of loop.
-    def analysis_func(arg):
-        list_.append(arg)
 
     interval = 2.
-    loop = LoopAnalysis(eeg, buffer_len=interval, func=analysis_func,
+    loop = LoopAnalysis(eeg, buffer_len=interval, func=func,
                         args=('test',), show_window=False)
 
     # Test loop with show_window=False.
@@ -35,9 +40,23 @@ def test_LoopAnalysis():
     print(len(list_))
     assert len(list_) == list_len, "Analysis function called incorrect # of times."
 
-    # Attempt to test GUI. This might fail.
-    # window = MainWindow(loop.stream, loop.func, loop.args, loop.buffer_len,
-    #                     loop._kill_signal)
+    # Clean up.
+    eeg_1.stop()
+
+def test_MainWindow(qtbot):
+    eeg_1 = SyntheticData("EEG", 32, 100, send_data=True)
+    eeg = EEGStream()
+    time.sleep(5.)  # Wait to find stream.
+
+    event = threading.Event()
+    app = QApplication.instance()
+    if not app:
+        app = QApplication(sys.argv)
+
+    # Instantiate window.
+    window = MainWindow(eeg, func, (), 2, event)
+    window.show()
+    time.sleep(5.)  # Will sleeping allow the loop worker to work?
 
     # Clean up.
     eeg_1.stop()
