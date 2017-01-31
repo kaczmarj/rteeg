@@ -22,9 +22,6 @@ before_install:
 install:
   # Install dependencies.
   - pip install -r requirements.txt
-# Command to run tests.
-before_script:
-  - travis_wait bash -e .build_pyqt5.sh
 script:
   - py.test --cov=./
 after_success:
