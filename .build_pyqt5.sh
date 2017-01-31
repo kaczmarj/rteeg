@@ -7,9 +7,6 @@ SIP_FILE=$(basename $SIP_URL)
 PYQT_URL='https://sourceforge.net/projects/pyqt/files/PyQt5/PyQt-5.7.1/PyQt5_gpl-5.7.1.tar.gz'
 PYQT_FILE=$(basename $PYQT_URL)
 
-# Download qt5. We need qmake.
-sudo apt-get qt5-default
-
 cd ..
 
 # Download SIP source, and build.
