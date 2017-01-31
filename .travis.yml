@@ -17,7 +17,7 @@ before_install:
   - sudo apt-get update -qq
   # Install scipy/numpy/pyqt dependencies.
   - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran qt5-default
-  - pip install pytest-cov scipy
+  - pip install pytest-cov pytestqt scipy
   - bash -e .build_pyqt5.sh
 install:
   # Install dependencies.
