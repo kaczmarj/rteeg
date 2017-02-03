@@ -63,11 +63,11 @@ for _ in range(5):
 
 # Default experiment arguments.
 info = {
-    'checkerboard size': 8,
-    'flash frequency': 4,
-    'number of trials': 10,
-    'trial duration': 2.,
-    'inter-stimulus interval' : .5,
+    'checkerboard size': 16,
+    'flash frequency': 7,
+    'number of trials': 30,
+    'trial duration': 10.,
+    'inter-stimulus interval' : 2,
 }
 
 # Show a dialog in which the user can change experiment arguments.
@@ -83,15 +83,13 @@ n_trials = info['number of trials']
 trial_dur = info['trial duration']
 ISI_dur = info['inter-stimulus interval']
 
-
 # Create a boolean array to indicate whether to show checkerboard.
 trials = [i for i in range(n_trials // 2) for i in [True, False]]
 np.random.shuffle(trials)  # Shuffles list in-place.
 
-
 # Instantiate the window.
-win = visual.Window([800, 600], allowGUI=False, monitor='testMonitor',
-                    units='deg')
+win = visual.Window([800, 600], fullscr=True, allowGUI=False,
+                    monitor='testMonitor', units='deg')
 
 # Instantiate our stimuli.
 instructions = visual.TextStim(win, pos=[0, 0],
@@ -115,7 +113,7 @@ core.wait(2.0)
 for show_checkerboard in trials:
     if show_checkerboard:
         t0 = local_clock()
-        print(markers['checkerboard'])  # outlet.push_sample(markers['checkerboard'])
+        outlet.push_sample(markers['checkerboard'])
         while local_clock() - t0 <= trial_dur:
             checkerboard1.draw()
             win.flip()
@@ -126,12 +124,11 @@ for show_checkerboard in trials:
             if event.getKeys(): core.quit()  # Quit if a key was pressed.
     else:
         t0 = local_clock()
-        print(markers['control'])  # outlet.push_sample(markers['control'])
+        outlet.push_sample(markers['control'])
         while local_clock() - t0 <= trial_dur:
             control_board.draw()
             win.flip()
             if event.getKeys(): core.quit()
-
     win.flip() # Clear the screen.
     core.wait(ISI_dur)
 
