@@ -4,7 +4,6 @@ from __future__ import division, print_function, absolute_import
 import datetime
 import numbers
 import time
-import warnings
 
 from mne import concatenate_raws, create_info, Epochs, io, set_log_level
 from mne.preprocessing import ICA
@@ -39,8 +38,6 @@ def _get_stream_inlet(lsl_predicate):
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
         logger.info("Connected to stream.")
-    # elif not stream:  # This would never happen without a timeout.
-    #     raise ValueError("Zero streams match the given predicate.")
     else:
         msg = ("Multiple streams match the given predicate. Only one "
                "stream must match the predicate.")
@@ -90,11 +87,11 @@ def make_events(data, marker_stream, event_duration=0):
             eeg_index = (np.abs(data[-1, :] - timestamp)).argmin()
             # Add a row to the events array.
             events[event_index, :] = eeg_index, event_duration, marker_int
+        return events
     else:
         # Make empty events array.
-        logger.debug("Creating empty events array.")
+        logger.debug("Creating empty events array. No events found.")
         return np.array([[0, 0, 0]])
-    return events
 
 
 class EEGStream(BaseStream):
@@ -155,10 +152,10 @@ class EEGStream(BaseStream):
         if all(units):
             self._eeg_unit = units[0]
         else:
-            warnings.warn("Could not find EEG measurement unit.")
+            logger.warning("Could not find EEG measurement unit.")
 
         # Add stimulus channel.
-        ch_types = ['eeg' for __ in ch_names] + ['stim']
+        ch_types = ['eeg' for _ in ch_names] + ['stim']
         ch_names.append('STI 014')
 
         # Create mne.Info object.
@@ -170,7 +167,7 @@ class EEGStream(BaseStream):
             self.info = create_info(ch_names=ch_names,
                                     sfreq=sfreq, ch_types=ch_types,
                                     montage=None)
-            logger.warning("Could not find montage for {}"
+            logger.warning("Could not find montage for '{}'"
                            "".format(self.key))
 
         # Add time of recording.
