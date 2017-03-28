@@ -72,11 +72,11 @@ class BaseStream(object):
             return [row[:] for row in tmp]  # Deep copy.
         else:
             current_max = len(self.data)
-            tmp = self.data[:]  # Shallow copy.
+            tmp = self.data[-index:]  # Shallow copy.
             if index > current_max:
                 logger.warning("Last {} samples were requested, but only {} "
                                "are present.".format(index, current_max))
-            return [row[:] for row in tmp[-index:]]  # Deep copy.
+            return [row[:] for row in tmp]  # Deep copy.
 
 # Define this for now to not break imports.
 ThreadSafeList = None
