@@ -77,3 +77,6 @@ class BaseStream(object):
                 logger.warning("Last {} samples were requested, but only {} "
                                "are present.".format(index, current_max))
             return [row[:] for row in tmp[-index:]]  # Deep copy.
+
+# Define this for now to not break imports.
+ThreadSafeList = None
