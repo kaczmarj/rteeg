@@ -1,7 +1,8 @@
+sudo: required
+dist: trusty  # Ubuntu 14.04 LTS
 branches:
   only:
-    # Only build on pushes or pull requests to master branch.
-    - master
+    - master  # Only build on pushes or pull requests to master branch.
 language: python
 python:
   - "2.7"
@@ -9,37 +10,20 @@ python:
   - "3.5"
   - "3.6"
 before_install:
-  - sudo apt-get -qq update
-  # Install scipy/numpy dependencies.
-  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
+  # To avoid matplotlib errors.
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+  - sleep 3 # Give xvfb some time to start.
+  - sudo apt-get update -qq
+  # Install scipy/numpy/pyqt dependencies.
+  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran qt5-default
   - pip install pytest-cov scipy
-  # Download PyQt4 source and build. Is there a faster way?
-  # At the least, move this to a bash script.
-  - cd ..
-  - curl -L -O http://sourceforge.net/projects/pyqt/files/sip/sip-4.14.1/sip-4.14.1.tar.gz
-  - tar -xvf sip-4.14.1.tar.gz
-  - cd sip-4.14.1
-  - python configure.py
-  - make -j 2
-  - sudo make install
-  - cd ..
-  - curl -L -O http://sourceforge.net/projects/pyqt/files/PyQt4/PyQt-4.9.5/PyQt-x11-gpl-4.9.5.tar.gz
-  - tar -xvf PyQt-x11-gpl-4.9.5.tar.gz
-  - cd PyQt-x11-gpl-4.9.5
-  - python configure.py --confirm-license
-  - travis_wait make -j 2  # travis_wait times out at 20 min by default.
-  - sudo make install
-  - cd ../rteeg
-  - python -c 'import PyQt4'
-  - python -c 'import PyQt4.QtCore'
-
+  - bash -e .build_pyqt5.sh
 install:
   # Install dependencies.
   - pip install -r requirements.txt
-# Command to run tests.
 script:
   - py.test --cov=./
-
 after_success:
   # Run Code Coverage
   - bash <(curl -s https://codecov.io/bash)

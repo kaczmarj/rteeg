@@ -1,6 +1,6 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Tests for rteeg.stream.py"""
-from __future__ import division
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 
 import threading
 import time
@@ -13,7 +13,8 @@ from pylsl import StreamInlet
 import pytest
 
 from rteeg import EEGStream, MarkerStream
-from rteeg.stream import _get_stream_inlet, make_events, SCALINGS
+from rteeg.stream import _get_stream_inlet, make_events
+from rteeg.utils import SCALINGS
 from rteeg.tests.utils import SyntheticData, true_markers
 
 
@@ -38,7 +39,7 @@ def test_get_stream_inlet():
 
 def test_make_events():
     eeg_out = SyntheticData("EEG", 32, 100)
-    eeg = EEGStream(eeg_system='Enobio32', lsl_predicate="type='EEG'")
+    eeg = EEGStream()
     eeg.data = eeg_out.create_data(5000)
 
     marker_outlet = SyntheticData("Markers", 1, 1)
@@ -66,7 +67,7 @@ def test_EEGStream():
     data_len = 5000
     eeg_out = SyntheticData("EEG", n_chs, sfreq, send_data=False)
     n_threads_1 = threading.active_count()
-    eeg = EEGStream("Test", lsl_predicate="type='EEG'")
+    eeg = EEGStream()
     time.sleep(5.)  # Allow some time for EEG stream to be found.
     n_threads_2 = threading.active_count()
 
@@ -75,7 +76,7 @@ def test_EEGStream():
     # Check for mne.Info object.
     assert isinstance(eeg.info, meas_info.Info), "Not mne.Info object."
     # Check for correct EEG unit.
-    assert eeg._eeg_unit == "millivolts", "Wrong EEG unit."
+    assert eeg._eeg_unit == "volts", "Wrong EEG unit."
     # Check for correct number of channels.
     assert len(eeg.info['ch_names']) == n_chs + 1, "Wrong number of channels."
     # Check for stim channel.
@@ -130,11 +131,44 @@ def test_EEGStream():
     # Check number of events.
     assert np.array_equal(epochs.events, true_markers), "Events incorrect."
 
-    # TODO: test EEGStream.fit_ica() and EEGStream.viz_ica()
-
     # Clean up.
     eeg_out.stop()
     marker_out.stop()
+    del eeg_out
+    del marker_out
+
+    # TODO: test EEGStream.fit_ica() and EEGStream.viz_ica()
+    # Check EEGStream.fit_ica()
+    eeg_out = SyntheticData("EEG", 32, 100, send_data=True)
+    eeg = EEGStream()
+    time.sleep(5.)
+
+    # Test EEGStream.fit_ica().
+    data_dur = 5
+    eeg.fit_ica(data_dur, when='next', warm_start=False)
+    eeg.fit_ica(data_dur, when='previous', warm_start=False)
+    len1 = len(eeg.raw_for_ica)
+    eeg.fit_ica(data_dur, when='next', warm_start=True)
+    len2 = len(eeg.raw_for_ica)
+    eeg.fit_ica(data_dur, when='previous', warm_start=True)
+    len3 = len(eeg.raw_for_ica)
+
+    assert len1 != 0, "fit_ica did not save raw object to raw_for_ica."
+    assert len2 == len1 * 2, "'next' did not use warm start."
+    assert len3 == len1 * 3, "'previous' did not use warm start."
+
+    # Check EEGStream.viz_ica().
+    eeg.viz_ica()
+    eeg.viz_ica('cleaned_data')
+    eeg.ica.exclude = [1, 2]
+    eeg.viz_ica('cleaned_data')
+    with pytest.raises(RuntimeError):
+        eeg.viz_ica('map_components')  # No digitization points found.
+
+    # Clean up.
+    eeg_out.stop()
+    del eeg_out
+
 
 def test_MarkerStream():
     marker_out = SyntheticData("Markers", 1, 1, send_data=False)

@@ -1,42 +1,24 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
-"""Class to class a function each time a data buffer becomes full.
-
-If we wanted to create a model and apply it within the same experiment, how
-could that be done?
-    Have a model training block of trials at the beginning, and once the block
-    is over, get the data and event markers from that block. Take all the data
-    and make epochs using those events (that way, we are sure we are not
-    discarding good data). Preprocess accordingly (filter, ICA), and then
-    extract the features (e.g., first 15 PCA components of power spectral
-    density output). Cross validate to check model performance, and then train
-    the model with all of the data. Save the model as an object in the class,
-    and predict each upcoming trial. But before each prediction, must filter,
-    apply ICA, and extract features.
+"""Classes related to analysis loops.
 
 TODO
 ----
 1. Add a function that will display a feedback window so the user can design and
     debug their feedback window.
 """
-from __future__ import division, print_function
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 import numbers
 import sys
 from threading import Event, Thread
 import time
 
 from pylsl import local_clock
-try:
-    from PyQt4 import QtGui, QtCore
-except ImportError:
-    raise ImportError("Package PyQt4 not found. GUI functionality not "
-                      "available (i.e., LoopAnalysis(..., show_window=True)).")
+from PyQt5 import QtGui, QtCore
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
 
-from .stream import EEGStream
+from rteeg.stream import EEGStream
+from rteeg.utils import logger
 
-
-def _get_latest_timestamp(stream):
-    """Get the last recorded timestamp from rteeg.EEGStream object."""
-    return stream.data[-1][-1]
 
 def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
                  pyqt_signal=None):
@@ -68,7 +50,6 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
 
     if show_window:
         while not kill_signal:
-            # t_one = _get_latest_timestamp(stream)
             t_one = stream.data[-1][-1]
             if t_one - t_zero >= buffer_len:
                 t_zero = t_one
@@ -77,13 +58,11 @@ def _loop_worker(stream, func, args, buffer_len, kill_signal, show_window=False,
             time.sleep(sleep_time)
     else:
         while not kill_signal.is_set():
-            # t_one = _get_latest_timestamp(stream)
             t_one = stream.data[-1][-1]
             if t_one - t_zero >= buffer_len:
                 t_zero = t_one
                 func(*args)
             time.sleep(sleep_time)
-
 
 
 class LoopAnalysis(object):
@@ -132,7 +111,7 @@ class LoopAnalysis(object):
                             "".format(type(args)))
 
         self.stream = stream
-        self.buffer_len = buffer_len
+        self.buffer_len = float(buffer_len)
         self.func = func
         self.args = args
         self.show_window = show_window
@@ -140,19 +119,8 @@ class LoopAnalysis(object):
         self.running = False
         self._kill_signal = Event()
 
-        if not self.show_window:
-            # Start the analysis loop in another thread.
-            self._loop_analysis_thread = Thread(target=self._loop_analysis,
-                                                name="Analysis-loop")
-            self._loop_analysis_thread.daemon = True
-            self._loop_analysis_thread.start()
-
-        else:
-            self._loop_analysis_show_window()
-
     def _loop_analysis(self):
         """Call a function every time a buffer reaches `self.buffer_len`."""
-        self.running = True
         _loop_worker(stream=self.stream, func=self.func, args=self.args,
                      buffer_len=self.buffer_len, kill_signal=self._kill_signal,
                      show_window=self.show_window)
@@ -165,61 +133,71 @@ class LoopAnalysis(object):
         in the feedback window. This string can include HTML and CSS, though not
         all CSS is supported. See PyQt's stylesheet.
         """
-        app = QtGui.QApplication.instance()
+        app = QApplication.instance()
         if not app:
-            app = QtGui.QApplication(sys.argv)
+            app = QApplication(sys.argv)
         self.window = MainWindow(self.stream, self.func,
                                  self.args, self.buffer_len,
                                  self._kill_signal)
         self.window.show()
-        # Stop the AnalysisLoop if MainWindow is closed.
+        # Stop the analysis loop if MainWindow is closed.
         app.aboutToQuit.connect(self.stop)
         sys.exit(app.exec_())
 
+    def start(self):
+        """Start the analysis loop."""
+        if not self.running:
+            self.running = True
+            if not self.show_window:
+                # Start the analysis loop in another thread.
+                self._loop_analysis_thread = Thread(target=self._loop_analysis,
+                                                    name="Analysis-loop")
+                self._loop_analysis_thread.daemon = True
+                self._loop_analysis_thread.start()
+
+            else:
+                self._loop_analysis_show_window()
+        else:
+            logger.info("Loop of analysis already running.")
+
     def stop(self):
         """Stop the analysis loop."""
-        self._kill_signal.set()
-        self.running = False
+        if self.running:
+            self._kill_signal.set()
+            self.running = False
+            if self.show_window:
+                self.window.worker.stop()
+            logger.info("Loop of analysis stopped.")
+        else:
+            logger.info("Loop of analysis not running. Nothing to stop.")
 
-        if self.show_window:
-            self.window.worker.stop()
 
-        print("Loop of analysis stopped.")
-
-
-
-class MainWindow(QtGui.QWidget):
+class MainWindow(QWidget):
     """Window that displays feedback."""
     def __init__(self, stream, func, args, buffer_len, kill_signal,
                  parent=None):
         super(MainWindow, self).__init__(parent)
 
-        self.stream = stream
-        self.func = func
-        self.args = args
-        self.buffer_len = buffer_len
-        self.kill_signal = kill_signal
-
-        self.feedback = QtGui.QLabel()
+        self.feedback = QLabel()
         self.feedback.setText("Waiting for feedback ...")
         self.feedback.setAlignment(QtCore.Qt.AlignCenter)
 
-        self.font = QtGui.QFont()
-        self.font.setPointSize(24)
-        self.feedback.setFont(self.font)
+        font = QtGui.QFont()
+        font.setPointSize(24)
+        self.feedback.setFont(font)
 
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = QVBoxLayout()
         self.layout.addWidget(self.feedback)
 
         self.setLayout(self.layout)
         self.setWindowTitle("feedback")
         self.resize(300, 200)
 
-        self.worker = Worker(stream=self.stream,
-                             func=self.func,
-                             args=self.args,
-                             buffer_len=self.buffer_len,
-                             kill_signal=self.kill_signal)
+        self.worker = Worker(stream=stream,
+                             func=func,
+                             args=args,
+                             buffer_len=buffer_len,
+                             kill_signal=kill_signal)
         self.worker.refresh_signal.connect(self.update)
         self.worker.start()
 
@@ -228,14 +206,12 @@ class MainWindow(QtGui.QWidget):
         self.feedback.setText(text)
 
 
-
 class Worker(QtCore.QThread):
     """Updates feedback in separate QThread."""
     refresh_signal = QtCore.pyqtSignal(str)
 
-    def __init__(self, stream, func, args, buffer_len, kill_signal,
-                 parent=None):
-        super(Worker, self).__init__(parent)
+    def __init__(self, stream, func, args, buffer_len, kill_signal):
+        super(Worker, self).__init__()
 
         self.stream = stream
         self.func = func

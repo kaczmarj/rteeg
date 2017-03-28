@@ -1,10 +1,9 @@
-# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
 """Classes to stream EEG data and event markers."""
-from __future__ import division, print_function
+# Author: Jakub Kaczmarzyk <jakubk@mit.edu>
+from __future__ import division, print_function, absolute_import
 import datetime
 import numbers
 import time
-import warnings
 
 from mne import concatenate_raws, create_info, Epochs, io, set_log_level
 from mne.preprocessing import ICA
@@ -12,23 +11,12 @@ from mne.utils import ProgressBar
 import numpy as np
 from pylsl import StreamInlet, local_clock, resolve_bypred
 
-from rteeg import default_predicates
-from .base import BaseStream
+from rteeg.base import BaseStream
+from rteeg.default_predicates import eeg_predicates, marker_predicates
+from rteeg.utils import logger, SCALINGS
 
 # How much MNE talks.
 set_log_level(verbose='error')
-
-# Always print warnings.
-warnings.filterwarnings(action='always', module='rteeg')
-
-# MNE wants EEG values in volts.
-SCALINGS = {
-    'volts': 1.,
-    'millivolts': 1. / 1e+3,
-    'microvolts': 1. / 1e+6,
-    'nanovolts': 1. / 1e+9,
-    'unknown': 1.,
-}
 
 
 def _get_stream_inlet(lsl_predicate):
@@ -39,23 +27,24 @@ def _get_stream_inlet(lsl_predicate):
     ----------
     lsl_predicate : str
         Predicate used to find LabStreamingLayer stream. See
-        `default_eeg_predicates.py` for more info.
+        `default_predicates.py` for more info.
 
     Returns
     -------
     inlet : pylsl.StreamInlet
         The LSL stream that matches the given predicate.
     """
-    stream = resolve_bypred(lsl_predicate)  # Should timeout be specified?
+    stream = resolve_bypred(lsl_predicate)  # Times out after ~ 1 year.
     if len(stream) == 1:
         inlet = StreamInlet(stream[0])
-        print("Connected to stream.")  # TODO: change this to logging.
-    elif not stream:  # This would never happen without a timeout.
-        raise ValueError("Zero streams match the given predicate.")
+        logger.info("Connected to stream.")
     else:
-        raise ValueError("Multiple streams match the given predicate. Only one "
-                         "stream must match the predicate.")
+        msg = ("Multiple streams match the given predicate. Only one "
+               "stream must match the predicate.")
+        logger.error(msg)
+        raise ValueError(msg)
     return inlet
+
 
 def make_events(data, marker_stream, event_duration=0):
     """Create array of events.
@@ -91,40 +80,41 @@ def make_events(data, marker_stream, event_duration=0):
                    dtype=np.int32)
     # Pre-allocate array for speed.
     events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
-    # If there is at least one marker ...
+    # If there is at least one marker:
     if tmp.shape[0] > 0:
         for event_index, (marker_int, timestamp) in enumerate(tmp):
             # Get the index where this marker happened in the EEG data.
             eeg_index = (np.abs(data[-1, :] - timestamp)).argmin()
             # Add a row to the events array.
             events[event_index, :] = eeg_index, event_duration, marker_int
+        return events
     else:
         # Make empty events array.
+        logger.debug("Creating empty events array. No events found.")
         return np.array([[0, 0, 0]])
-    return events
 
 
 class EEGStream(BaseStream):
-    """
+    """Class to receive EEG data.
+
     Parameters
     ----------
-    eeg_system : {'Enobio32'}
+    key : str
         The EEG system being used. This name indicates which predicate to use
         in `default_predicates.py`.
-    lsl_predicate : str
     """
-    def __init__(self, eeg_system, lsl_predicate=None):
+    def __init__(self, key='default'):
         super(EEGStream, self).__init__()
-        self.eeg_system = eeg_system
-        self.lsl_predicate = lsl_predicate
-        if self.lsl_predicate is None:
-            try:
-                self.lsl_predicate = default_predicates.eeg[eeg_system]
-            except KeyError:
-                raise ValueError("The `eeg_system` {} has no LabStreamingLayer "
-                                 "predicate defined in `default_predicates`. "
-                                 "Without a valid predicate, streams cannot be "
-                                 "found.".format(self.eeg_system))
+        self.key = key
+        try:
+            self.lsl_predicate = eeg_predicates[key]
+        except KeyError:
+            msg = ("The `key` {} has no LabStreamingLayer "
+                   "predicate defined in `default_predicates.py`. "
+                   "Without a valid predicate, the stream cannot be "
+                   "found.".format(self.key))
+            logger.error(msg)
+            raise KeyError(msg)
 
         self._stream_inlet = None
         self._eeg_unit = 'unknown'
@@ -138,6 +128,7 @@ class EEGStream(BaseStream):
     def _connect(self):
         """Connect to stream and record data to list."""
         self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
+        self._active = True
 
         # Extract stream info.
         info = self._stream_inlet.info()
@@ -161,23 +152,23 @@ class EEGStream(BaseStream):
         if all(units):
             self._eeg_unit = units[0]
         else:
-            warnings.warn("Could not find EEG measurement unit.")
+            logger.warning("Could not find EEG measurement unit.")
 
         # Add stimulus channel.
-        ch_types = ['eeg' for __ in ch_names] + ['stim']
+        ch_types = ['eeg' for _ in ch_names] + ['stim']
         ch_names.append('STI 014')
 
         # Create mne.Info object.
         try:
             self.info = create_info(ch_names=ch_names,
                                     sfreq=sfreq, ch_types=ch_types,
-                                    montage=self.eeg_system)
+                                    montage=self.key)
         except ValueError:
             self.info = create_info(ch_names=ch_names,
                                     sfreq=sfreq, ch_types=ch_types,
                                     montage=None)
-            warnings.warn("Could not find montage for {}"
-                          "".format(self.eeg_system))
+            logger.warning("Could not find montage for '{}'"
+                           "".format(self.key))
 
         # Add time of recording.
         dt = datetime.datetime.now()
@@ -194,8 +185,8 @@ class EEGStream(BaseStream):
         not change. For example, if you call this method, wait 3 seconds, and
         call it again, it will say the latency is 3 seconds. Is it related to
         locking? Refreshing something about the last item in `data`? But the
-        lock releases after returning. Not sure how to replicate this bug. Lock
-        is not necessary here.
+        lock releases after returning. Not sure how to replicate this bug.
+        Probably related to I/O. Active thread does not switch until I/O?
         """
         return local_clock() - self.data[-1][-1]
 
@@ -255,15 +246,14 @@ class EEGStream(BaseStream):
             The EEG data.
         """
         raw_data = self.get_data(data_duration=data_duration)
-        # Add events if Markers stream was started.
         raw_data[-1, :] = 0  # Make row of timestamps a row of events 0.
-        # If user wants to apply ICA...
+
         if not apply_ica:
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
                                verbose=verbose)
         elif apply_ica and self.ica.current_fit == 'unfitted':
             return io.RawArray(raw_data, self.info, first_samp=first_samp,
-                              verbose=verbose)
+                               verbose=verbose)
         elif apply_ica and self.ica.current_fit != 'unfitted':
             raw = io.RawArray(raw_data, self.info, first_samp=first_samp,
                               verbose=verbose)
@@ -326,18 +316,6 @@ class EEGStream(BaseStream):
 
         Components marked for removal can be accessed with self.ica.exclude.
 
-        Use example:
-
-        >>> rt = Stream()
-        >>> rt.connect(eeg=True)  # Connect to LSL stream of EEG data.
-        >>> rt.fit_ica(10)  # Fit the ICA on the next 10 seconds of data.
-        >>> # Plot the ICA sources and click on components to mark for removal
-        >>> rt.ica.plot_sources(rt.raw_for_ica)
-        >>> # Assuming at least one component was marked for removal, visualize
-        >>> # the effects of removing the component(s) in raw data.
-        >>> rt.ica.apply(rt.raw_for_ica).plot()
-
-
         data : int, float, mne.RawArray
             The duration of previous or incoming data to use to fit the ICA, or
             an mne.RawArray object of data.
@@ -380,7 +358,7 @@ class EEGStream(BaseStream):
                         pbar.update(len(self.data) - start_index)
                     except ValueError:
                         pass
-                print("")
+                print("")  # Get onto new line after progress bar finishes.
 
             _data = np.array([r[:] for r in
                               self.data[start_index:end_index]]).T
@@ -397,10 +375,10 @@ class EEGStream(BaseStream):
             else:
                 self.raw_for_ica = io.RawArray(_data, self.info)
 
-        print("Computing ICA solution ...")
+        logger.info("Computing ICA solution ...")
         t_0 = local_clock()
         self.ica.fit(self.raw_for_ica.copy())  # Fits in-place.
-        print("Finished in {:.2f} s".format(local_clock() - t_0))
+        logger.info("Finished in {:.2f} s".format(local_clock() - t_0))
 
     def viz_ica(self, plot='components'):
         """Visualize data with components removed.
@@ -412,7 +390,7 @@ class EEGStream(BaseStream):
         this function again, and change the selection on the plot of latent ICA
         components.
 
-        plot : {'components', 'scalp_components', 'cleaned_data'}
+        plot : {'components', 'map_components', 'cleaned_data'}
             'components' : Plot the latent ICA components. Components to be
                            removed are selected on this plot.
             'map_components' : Plot the distribution of components across
@@ -432,28 +410,41 @@ class EEGStream(BaseStream):
                                "fit ICA does not exist. Fit ICA before "
                                "calling this function again.")
 
+        if plot not in ['components', 'map_components', 'cleaned_data']:
+            raise ValueError("Argument '{}' not recognized. Only 'components', "
+                             "'map_components', and 'cleaned_data' are allowed."
+                             "".format(plot))
+
         if plot == 'components':
             return self.ica.plot_sources(self.raw_for_ica)
         elif plot == 'map_components':
             return self.ica.plot_components()
         elif plot == 'cleaned_data':
             if not self.ica.exclude:
-                warnings.warn("No ICA components were marked for removal. EEG "
+                logger.warning("No ICA components were marked for removal. EEG "
                               "data has not been changed.")
-            print("Components to be removed: {}".format(self.ica.exclude))
+            logger.info("Components marked for removal: {}"
+                        "".format(self.ica.exclude))
             return self.ica.apply(self.raw_for_ica.copy()).plot()
 
 
 class MarkerStream(BaseStream):
     """Docstring here"""
-    def __init__(self, lsl_predicate_key='default'):
+    def __init__(self, key='default'):
         super(MarkerStream, self).__init__()
-        self.lsl_predicate_key = lsl_predicate_key
-        self.lsl_predicate = default_predicates.markers[self.lsl_predicate_key]
-        self._stream_inlet = None
+        try:
+            self.lsl_predicate = marker_predicates[key]
+        except KeyError:
+            msg = ("The `key` {} has no LabStreamingLayer "
+                   "predicate defined in `default_predicates.py`. "
+                   "Without a valid predicate, the stream cannot be "
+                   "found.".format(key))
+            logger.error(msg)
+            raise KeyError(msg)
         self.connect(self._connect, 'Marker-data')
 
     def _connect(self):
         """Connect to stream and record data to list."""
         self._stream_inlet = _get_stream_inlet(self.lsl_predicate)
+        self._active = True
         self._record_data_indefinitely(self._stream_inlet)
