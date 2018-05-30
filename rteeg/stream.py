@@ -75,9 +75,8 @@ def make_events(data, marker_stream, event_duration=0):
     lower_time_limit = data[-1, 0]
     upper_time_limit = data[-1, -1]
     # Copy markers into a Numpy ndarray.
-    tmp = np.array([row[:] for row in marker_stream.data
-                    if upper_time_limit >= row[-1] >= lower_time_limit],
-                   dtype=np.int32)
+    tmp = np.array([(marker_int, timestamp) for marker_int, timestamp in marker_stream.data
+                   if upper_time_limit >= timestamp >= lower_time_limit])
     # Pre-allocate array for speed.
     events = np.zeros(shape=(tmp.shape[0], 3), dtype=np.int32)
     # If there is at least one marker:
@@ -261,10 +260,10 @@ class EEGStream(BaseStream):
 
     def make_epochs(self, marker_stream, data_duration=None, events=None,
                     event_duration=0, event_id=None, apply_ica=True, tmin=-0.2,
-                    tmax=1.0, baseline=(None, 0), picks=None, name='Unknown',
+                    tmax=1.0, baseline=(None, 0), picks=None,
                     preload=False, reject=None, flat=None, proj=True, decim=1,
                     reject_tmin=None, reject_tmax=None, detrend=None,
-                    add_eeg_ref=None, on_missing='error',
+                    on_missing='error',
                     reject_by_annotation=True, verbose=None):
         """Create instance of mne.Epochs. If events are not supplied, this
         script must be connected to a Markers stream.
@@ -298,11 +297,11 @@ class EEGStream(BaseStream):
             raw = self.ica.apply(raw)
             # Should this be changed? ICA.apply() works in-place on raw.
         return Epochs(raw, events, event_id=event_id, tmin=tmin, tmax=tmax,
-                      baseline=baseline, picks=picks, name=name,
+                      baseline=baseline, picks=picks,
                       preload=preload, reject=reject, flat=flat, proj=proj,
                       decim=decim, reject_tmin=reject_tmin,
                       reject_tmax=reject_tmax, detrend=detrend,
-                      add_eeg_ref=add_eeg_ref, on_missing=on_missing,
+                      on_missing=on_missing,
                       reject_by_annotation=reject_by_annotation,
                       verbose=verbose)
 
